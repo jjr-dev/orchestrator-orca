@@ -54,6 +54,11 @@
 # dimensione pela sua RAM, nao pelo numero de repos).
 
 defaults:
+  # Onde os anexos baixados do Linear ficam. Precisa estar FORA de qualquer
+  # repositorio git: anexo nao pode ser commitado por acidente. Aceita ~ e
+  # pode apontar para volume externo — os scripts checam se esta montado
+  # antes de gravar. Override pontual: $ORCH_ASSETS_ROOT.
+  assets_root: ~/.orch-assets
   wip_max_global: 5
   agent: claude
   # Ate 02/09 este bloco era decoracao: nada lia estes valores e TUDO rodava

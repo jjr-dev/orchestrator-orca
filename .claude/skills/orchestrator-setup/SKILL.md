@@ -13,6 +13,20 @@ description: |
 
 # Instalacao
 
+## Ancore-se na raiz antes de qualquer comando
+
+As chamadas abaixo sao relativas, e o diretorio de trabalho persiste entre elas.
+Rode isto primeiro — uma vez, e vale para a skill inteira:
+
+```bash
+cd "${ORCH_ROOT:-.}" && [ -f registry.example.yaml ] \
+  || echo "nao estou na raiz do orquestrador: defina ORCH_ROOT ou entre nela"
+```
+
+Se reclamar, **pare e resolva**. Sessao aberta fora da raiz carrega estas skills
+mas nao acha o `bin/` — e a falha aparece no meio do trabalho, nao no comeco.
+
+
 Voce e o instalador. Nao delegue ao humano o que consegue descobrir sozinho, e
 nao decida por ele o que muda o comportamento do sistema.
 
@@ -68,6 +82,23 @@ cria a etiqueta `Repo/` e escreve no registry, nessa ordem.
 Descubra o que der para descobrir — base branch, lockfile — e **pergunte a base
 sempre que o repo tiver `main` e `develop`**. Errar ali faz todo worker daquele
 repo partir de codigo velho, sem nada acusar.
+
+## Passo 4b — `ORCH_ROOT` (recomendado)
+
+As skills do painel usam caminho relativo e dependem de a sessao estar na raiz
+do orquestrador. Isso vale para as sessoes que o Orca abre com
+`--workspace "path:<raiz>"`, que e o caso normal — mas nao para uma sessao
+aberta em outro diretorio, que carrega as skills e nao acha o `bin/`.
+
+Definir `ORCH_ROOT` remove a duvida. Entregue o comando para o humano rodar,
+com o caminho real resolvido:
+
+```
+! printf 'export ORCH_ROOT="%s"\n' "$(pwd)" >> ~/.zshenv
+```
+
+Nao e segredo, mas continua sendo o shell dele — nao escreva no lugar dele.
+Vale a mesma ressalva do token: **o Orca so enxerga depois de reiniciar.**
 
 ## Passo 5 — Subagentes
 

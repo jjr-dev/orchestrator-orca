@@ -12,6 +12,20 @@ description: |
 
 # Puxar tickets prontos e despachar
 
+## Ancore-se na raiz antes de qualquer comando
+
+As chamadas abaixo sao relativas, e o diretorio de trabalho persiste entre elas.
+Rode isto primeiro — uma vez, e vale para a skill inteira:
+
+```bash
+cd "${ORCH_ROOT:-.}" && [ -f registry.example.yaml ] \
+  || echo "nao estou na raiz do orquestrador: defina ORCH_ROOT ou entre nela"
+```
+
+Se reclamar, **pare e resolva**. Sessao aberta fora da raiz carrega estas skills
+mas nao acha o `bin/` — e a falha aparece no meio do trabalho, nao no comeco.
+
+
 Argumento: `$ARGUMENTS` = chave da empresa no `registry.yaml` (ex: `acme`), para
 restringir a execucao a uma so empresa.
 
@@ -275,7 +289,7 @@ inclua no prompt, literal:
 ```
 Este ticket tem imagem. ANTES de planejar, rode e abra cada arquivo com o Read:
   ./bin/linear-assets.sh <IDENT>
-Os arquivos vao para /Volumes/XPG_SSD/developer/.orch-assets/<IDENT>/, fora do
+Os arquivos vao para `$(bin/assets-root.sh)`/<IDENT>/, fora do
 worktree — nao copie para dentro dele e nao ha nada para apagar antes do commit.
 ```
 

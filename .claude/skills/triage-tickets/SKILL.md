@@ -13,6 +13,20 @@ description: |
 
 # Triagem: de ideia solta para ticket executavel
 
+## Ancore-se na raiz antes de qualquer comando
+
+As chamadas abaixo sao relativas, e o diretorio de trabalho persiste entre elas.
+Rode isto primeiro — uma vez, e vale para a skill inteira:
+
+```bash
+cd "${ORCH_ROOT:-.}" && [ -f registry.example.yaml ] \
+  || echo "nao estou na raiz do orquestrador: defina ORCH_ROOT ou entre nela"
+```
+
+Se reclamar, **pare e resolva**. Sessao aberta fora da raiz carrega estas skills
+mas nao acha o `bin/` — e a falha aparece no meio do trabalho, nao no comeco.
+
+
 Argumento: `$ARGUMENTS` = chave da empresa no `registry.yaml`, para restringir a
 uma so empresa. **Sem argumento, roda para todas** — e assim que a automation
 chama. Nunca pergunte qual empresa: em execucao por cron nao ha ninguem para
@@ -192,7 +206,7 @@ Sem anexo ele diz `nenhum anexo em <IDENT>` e sai limpo — nao e erro, siga.
 tentar `WebFetch` na URL, nem colar a URL na descricao esperando que alguem
 adiante consiga abrir. So o arquivo local funciona.
 
-**Os arquivos vao para o SSD externo**, em `/Volumes/XPG_SSD/developer/.orch-assets/<IDENT>/`,
+**Os arquivos vao para o SSD externo**, em ``$(bin/assets-root.sh)`/<IDENT>/`,
 fora de qualquer repositorio git. E de proposito: nao ocupam o disco interno e
 nao ha como serem commitados por acidente. Se o SSD estiver desmontado o script
 para com exit 2 em vez de escrever no disco interno — se isso acontecer, reporte

@@ -17,7 +17,7 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/linear-key.sh"
 
 IDENT="${1:?uso: linear-assets.sh <IDENT> [dest-root]}"
-ROOT="${2:-${ORCH_ASSETS_ROOT:-/Volumes/XPG_SSD/developer/.orch-assets}}"
+ROOT="${2:-$("$(dirname "${BASH_SOURCE[0]}")/assets-root.sh")}"
 
 TEAM="${IDENT%%-*}"
 NUM="${IDENT##*-}"
@@ -33,7 +33,7 @@ esac
 
 # O volume externo pode estar desmontado. Se estiver, PARE: escrever no disco
 # interno e justamente o que nao queremos, e o erro seria silencioso — o mkdir
-# criaria /Volumes/XPG_SSD como diretorio comum e tudo pareceria funcionar.
+# criaria o ponto de montagem como diretorio comum e tudo pareceria funcionar.
 VOL="/$(printf '%s' "${ROOT#/}" | cut -d/ -f1-2)"
 if [ "${ROOT#/Volumes/}" != "$ROOT" ] && ! mount | grep -q " on $VOL "; then
   echo "volume '$VOL' nao esta montado — nao vou baixar para o disco interno" >&2

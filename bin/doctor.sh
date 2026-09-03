@@ -160,6 +160,15 @@ if [ -f registry.yaml ] && [ -n "${TEAM:-}" ]; then
 fi
 
 # ---------------------------------------------------------------- 5. execucao
+secao "ancoragem"
+if [ -n "${ORCH_ROOT:-}" ]; then
+  [ "$(cd "$ORCH_ROOT" 2>/dev/null && pwd)" = "$RAIZ" ] \
+    && ok "ORCH_ROOT aponta para ca" \
+    || falha "ORCH_ROOT aponta para outro lugar" "vale '${ORCH_ROOT}', mas este repo esta em $RAIZ"
+else
+  aviso "ORCH_ROOT nao definido" "as skills dependem de a sessao estar na raiz; sessao aberta em outro diretorio quebra no bin/"
+fi
+
 secao "hooks e politica de execucao"
 if [ -x bin/guard-commands.sh ]; then
   ok "guard-commands.sh existe e e executavel"

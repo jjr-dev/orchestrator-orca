@@ -17,7 +17,7 @@ sem ninguem no meio para perceber.
 
 1. Leia a especificacao do ticket inteira antes de abrir qualquer arquivo.
    Se ela tiver imagem, abra o arquivo local com o Read antes de planejar — o
-   worker ja baixou para `/Volumes/XPG_SSD/developer/.orch-assets/<IDENT>/`.
+   worker ja baixou para ``$(bin/assets-root.sh)`/<IDENT>/`.
    Planejar so pelo texto, tendo mockup disponivel, produz plano errado.
 2. Leia os arquivos reais que serao tocados, mais o CLAUDE.md do repo e os padroes
    vizinhos. Plano escrito sem ler o codigo produz lista de arquivos inventada.

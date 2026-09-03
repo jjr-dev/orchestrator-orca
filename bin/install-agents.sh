@@ -2,7 +2,7 @@
 # Instala os subagentes do orquestrador em ~/.claude/agents/.
 #
 # Por que global e nao no repo: quem invoca estes agentes e o WORKER, e o worker
-# roda no worktree do cliente (/Volumes/XPG_SSD/developer/workspaces/...). O
+# roda no worktree do cliente (fora deste repositorio). O
 # Claude Code so enxerga `.claude/agents/` do projeto atual e de ~/.claude —
 # e escrever dentro do repo do cliente esta proibido. Sobra o global.
 #

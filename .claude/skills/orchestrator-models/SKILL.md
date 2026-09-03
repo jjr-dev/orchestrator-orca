@@ -12,6 +12,20 @@ description: |
 
 # Modelos e effort por etapa
 
+## Ancore-se na raiz antes de qualquer comando
+
+As chamadas abaixo sao relativas, e o diretorio de trabalho persiste entre elas.
+Rode isto primeiro — uma vez, e vale para a skill inteira:
+
+```bash
+cd "${ORCH_ROOT:-.}" && [ -f registry.example.yaml ] \
+  || echo "nao estou na raiz do orquestrador: defina ORCH_ROOT ou entre nela"
+```
+
+Se reclamar, **pare e resolva**. Sessao aberta fora da raiz carrega estas skills
+mas nao acha o `bin/` — e a falha aparece no meio do trabalho, nao no comeco.
+
+
 ## Mostre o estado real, nao o arquivo
 
 Ler o YAML nao prova nada: por semanas este bloco foi decoracao — os valores

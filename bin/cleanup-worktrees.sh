@@ -157,7 +157,7 @@ fi   # fim do bloco de worktrees
 # Teste unico: o ticket esta `Done`, ou sumiu do Linear. Nao ha o que perder —
 # o arquivo veio do Linear e o `linear-assets.sh` baixa de novo quando preciso.
 AGC=0
-AROOT="${ORCH_ASSETS_ROOT:-/Volumes/XPG_SSD/developer/.orch-assets}"
+AROOT="$("$(dirname "${BASH_SOURCE[0]}")/assets-root.sh")"
 ADIRS=$(find "$AROOT" -mindepth 1 -maxdepth 1 -type d -name "$TEAM-*" 2>/dev/null | sort || true)
 
 if [ -n "$ADIRS" ]; then

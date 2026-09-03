@@ -157,7 +157,7 @@ vai construir; planejar so pelo texto produz codigo que resolve outra coisa.
 Nao tente abrir a URL `uploads.linear.app` direto: ela devolve 401 sem a chave
 da API, e o `WebFetch` nao le imagem nem quando a URL abre.
 
-Os arquivos ficam em `/Volumes/XPG_SSD/developer/.orch-assets/<IDENT>/`, **fora
+Os arquivos ficam em ``$(bin/assets-root.sh)`/<IDENT>/`, **fora
 do worktree**. Nao copie para dentro dele: fora do repositorio nao existe risco
 de entrarem no commit, e nao ha nada para apagar depois.
 
