@@ -1,0 +1,215 @@
+# Fonte de verdade que liga etiqueta do Linear -> repositorio real.
+# O Linear guarda o nome legivel. Aqui ficam os detalhes de maquina.
+#
+# Modelo de workspace unico: existe um so time no Linear e a separacao
+# por empresa e feita pela etiqueta Repo/, resolvida por este arquivo.
+# `linear_team` e o mesmo em todas as empresas de proposito — ele so serve para
+# o precheck do cron saber onde buscar, nao para rotear ticket.
+#
+# Politica de execucao: `gate` esta vazio em todos os repos. O agente entrega
+# planejamento e codigo, e NAO executa comando nenhum do projeto — nem lint,
+# typecheck, build, teste, migration ou servidor de dev. Tudo o que precisa
+# rodar mora em `manual` e e humano. O agente so transcreve essa lista no corpo
+# do PR, como roteiro, sem saida — porque nao rodou nada.
+#
+# Isto e IMPOSTO por bin/guard-commands.sh, nao so pedido nas skills, e inclui
+# INSTALAR DEPENDENCIA. `npm install` reescreve package-lock.json e `yarn
+# install` mexe no yarn.lock quando ha divergencia de versao — viraria mudanca
+# nao pedida no PR. O worker nao precisa: le e escreve codigo como texto.
+#
+# Consequencia: o campo `setup` abaixo e documentacao para o HUMANO, igual ao
+# `manual`. O agente nunca o executa. Onde o repo precisa de dependencia no
+# worktree, quem resolve e o hook de setup do Orca (rsync), fora do alcance do
+# hook de comandos.
+#
+# Ambiente incompleto NAO e motivo para parar. Se a maquina nao tem o runtime
+# de algum repo (php, composer, pnpm...), o `setup` falharia de qualquer forma —
+# o worker segue a implementacao e lista a acao pendente na secao "Acoes manuais
+# necessarias" do PR, nunca instala runtime por conta propria.
+#
+# 🔴 `base` PRECISA do prefixo `origin/`. Nao e cosmetico — decide se o worker
+# comeca do codigo atualizado ou de um checkout velho.
+#
+# Medido com a main local 5 dias atras do remoto:
+#
+#   --base-branch origin/main  -> Orca roda
+#                                 `fetch --no-tags origin +refs/heads/main:...`
+#                                 e corta a branch do tip recem-buscado    4bfe5162 ✅
+#   --base-branch main         -> usa a ref LOCAL, sem tocar na rede       e4496745 ❌
+#
+# Ou seja: o Orca busca o remoto sozinho, mas so quando a base aponta para uma
+# ref de rastreamento. Escrever `development` em vez de `origin/development`
+# faz o worker implementar em cima de codigo velho — e nada acusa. O PR abre,
+# passa no review e so aparece como conflito no merge.
+#
+# Naquela mesma medicao, 10 dos 20 `origin/<base>` locais estavam atrasados em
+# relacao ao GitHub. O fetch do Orca e o que fecha essa lacuna.
+#
+# O `/pull-ready` recusa despachar repo cuja `base` nao comece com `origin/`.
+#
+# Capacidade: `wip_max` e POR EMPRESA, nao por repo. Dois workers no mesmo repo
+# nao conflitam — cada um roda em worktree isolado. `wip_max_global` fica abaixo
+# da soma de proposito: os limites por empresa impedem que uma monopolize, e o
+# global protege a maquina (cada worker e uma sessao completa do Claude Code:
+# dimensione pela sua RAM, nao pelo numero de repos).
+
+defaults:
+  wip_max_global: 5
+  agent: claude
+  # Ate 02/09 este bloco era decoracao: nada lia estes valores e TUDO rodava
+  # Opus (medido em 30 dias de transcript: sonnet-5 = 0,07% dos tokens de
+  # saida). Agora cada linha tem um lugar concreto que a aplica.
+  #
+  # A divisao segue o custo real, nao a intuicao. Medido no worker: 24% dos
+  # tokens sao ler-e-planejar, 76% sao implementar. E o custo e dominado por
+  # LEITURA de contexto (cache read = 56% da conta), nao por geracao — por isso
+  # trocar o modelo do implementador vale muito mais que baixar o `effort`,
+  # que so mexe nos 15% de saida.
+  models:
+    # onde: .claude/settings.json do painel ("model": "opus")
+    # quem: /triage-tickets, /pull-ready, /ajustar, /reconcile
+    #
+    # Na instalacao de referencia ficou em Fable por algumas horas e voltou: o consumo
+    # subiu rapido demais no plano 5x. A economia projetada existia no preco por
+    # token, mas quem paga a conta e a cota, e a cota nao segue o preco.
+    orchestrator: opus
+    # onde: ~/.claude/agents/orch-planner.md
+    # quem: o PLAN.md dentro do worktree (passo 2 do worker-workflow)
+    #
+    # Com todos os papeis em Opus, o que o subagente rende e o isolamento de
+    # contexto: o que ele leu para planejar nao fica sendo re-cobrado 60x
+    # durante a implementacao. So isso ja paga a delegacao.
+    planner: opus
+    # onde: `$(bin/implementer-model.sh <IDENT> --flags)` no `worker-start`
+    # quem: a sessao do worker, que implementa
+    #
+    # Unico papel com `effort` por ticket, e o unico que precisa: o resto herda
+    # o `effortLevel` global. So o implementador tem um eixo para variar.
+    #
+    # O eixo e o RISCO, nao o tamanho. Medido em 140 sessoes de worker, a
+    # mediana e 86 turnos e 13,6% delas passam de 200 turnos concentrando 79%
+    # do custo de leitura. Loop longo e onde a capacidade aparece — nao como
+    # linha errada, mas como perder o fio no meio. Entao o teto de raciocinio
+    # sobe onde a sessao e longa e desce onde ela e curta.
+    #
+    # Aqui todos os niveis sao Opus e so o `effort` varia. Trocar o MODELO de um
+    # nivel (`medium: {model: sonnet, effort: high}`) economiza MUITO mais: o
+    # cache read e 56% da conta e segue o preco do modelo, enquanto `effort` so
+    # alcanca a saida (~15%). A instalacao de referencia rodou assim e voltou
+    # para Opus por qualidade uniforme, nao porque nao funcionava.
+    implementer_by_risk:
+      high:   { model: opus, effort: xhigh }
+      medium: { model: opus, effort: high }
+      low:    { model: opus, effort: medium }
+    # usado so quando o ticket nao tem etiqueta Risk e o repo nao tem
+    # risk_default — ou seja, quando falta dado. Deliberadamente o mais caro:
+    # a falha silenciosa aceitavel e gastar demais, nunca entregar de menos.
+    implementer_fallback: { model: opus, effort: xhigh }
+    gate_runner: sonnet
+    # onde: ~/.claude/agents/orch-reviewer.md
+    # quem: le o diff contra o ticket antes do commit (passo 4b)
+    reviewer: opus
+
+  # O piso de `effort` e o `effortLevel` do ~/.claude/settings.json, hoje em
+  # `xhigh` — um degrau acima de `high`, e o ultimo antes de `max`. Por ser
+  # configuracao de sessao, vale para painel, worker e subagentes de uma vez.
+  #
+  # So o implementador escapa dele, porque `--effort` no `worker-start`
+  # sobrescreve o global naquela sessao. Painel, planner e reviewer nao tem
+  # eixo para variar e ficam no global — nao lhes de linha de effort aqui, seria
+  # um segundo lugar para divergir sem nada em troca.
+  #
+  # Lembre que `effort` mexe na SAIDA, ~15% da conta. E alavanca de qualidade,
+  # nao de custo: `medium` em vez de `xhigh` nao devolve nem perto do que
+  # trocar de modelo devolvia.
+
+  # Alias e nao id fixo de proposito: `fable`/`sonnet`/`opus` seguem sempre o
+  # modelo mais novo de cada familia, entao lancamento novo nao exige editar
+  # este arquivo. O Orca trata `--model` como id opaco e repassa ao Claude Code,
+  # que aceita alias ou nome completo. Se algum dia recusar o alias, os nomes
+  # completos equivalentes sao claude-fable-5-1, claude-sonnet-5, claude-opus-5.
+
+# Etiqueta Stack/<nome> = "este ticket atravessa estes repos, execute em conjunto".
+# E o mecanismo PRINCIPAL para ticket multi-repo: um toque no celular, nada de
+# escrever no corpo do ticket.
+#
+# O nome da etiqueta mostra os componentes de proposito — da para ler o que entra
+# sem consultar este arquivo.
+#
+# Quando surgir uma combinacao nova que se repita, CRIE UMA STACK para ela em vez
+# de improvisar no texto. O custo e uma etiqueta; o ganho e nunca mais digitar.
+#
+# Nao ha limite de dois repos por stack. Exemplo com tres:
+#
+#   "Acme - API/Web/Admin":
+#     - "Acme - API"
+#     - "Acme - Web"
+#     - "Acme - Admin"
+#
+# Lembre que os filhos entram todos na mesma onda: tres filhos da mesma empresa
+# ocupam as tres vagas do wip_max dela.
+stacks:
+  # Etiqueta Stack/<nome> = "este ticket atravessa estes repos, execute junto".
+  # E o mecanismo principal para ticket multi-repo: um toque no celular, sem
+  # escrever nada no corpo do ticket. O nome mostra os componentes de proposito.
+  "Acme - API/Web":
+    - "Acme - API"
+    - "Acme - Web"
+
+companies:
+  # Uma chave por empresa. O nome e so um agrupador para `wip_max` — quem roteia
+  # ticket e a etiqueta Repo/, resolvida pelos nomes dentro de `repos`.
+
+  acme:
+    # O time do Linear onde os tickets desta empresa vivem. No modelo de
+    # workspace unico e o mesmo em todas: serve para o precheck do cron saber
+    # onde buscar, nao para rotear.
+    linear_team: ACME
+    # Quantos workers simultaneos esta empresa pode ter. Ver a nota de
+    # capacidade no cabecalho.
+    wip_max: 3
+    repos:
+
+      # 🔴 A chave TEM que ser identica ao nome da etiqueta Repo/ no Linear.
+      # E a chave da resolucao inteira; divergir deixa o ticket invisivel.
+      "Acme - API":
+        # nome curto, usado em nome de branch e de worktree
+        slug: api-acme
+        # `orca repo add --path <caminho> --json` devolve este id.
+        # Preencha com o comando, nao a mao — o /orchestrator-repo-add faz.
+        orca_repo_id: 00000000-0000-0000-0000-000000000000
+        # 🔴 PRECISA do prefixo origin/. Ver a medicao no cabecalho.
+        base: origin/main
+        # documentacao para o HUMANO. O agente NUNCA executa isto.
+        setup: npm ci
+        # politica de execucao zero. Ver o cabecalho.
+        gate: []
+        # o roteiro de verificacao humana. O worker transcreve no PR, sem saida,
+        # porque nao rodou nada.
+        manual:
+          - npm run lint
+          - npm run typecheck
+          - npm run build
+          - npm test
+        ci: github
+        # o outro lado da stack, quando houver. Usado para propor a quebra em
+        # ticket pai + filhos com contrato de API entre eles.
+        pair: "Acme - Web"
+        plan_gate: false
+        # usado quando o ticket nao tem etiqueta Risk/: e o risco presumido
+        # deste repo. Ver implementer_by_risk em defaults.models.
+        risk_default: high
+
+      "Acme - Web":
+        slug: web-acme
+        orca_repo_id: 00000000-0000-0000-0000-000000000001
+        base: origin/main
+        setup: npm ci
+        gate: []
+        manual:
+          - npm run lint
+          - npm run build
+        ci: github
+        pair: "Acme - API"
+        plan_gate: false
+        risk_default: medium

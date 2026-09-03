@@ -1,0 +1,9 @@
+# Copiar como .worktreeinclude na raiz de CADA repo de cliente.
+# Sintaxe de .gitignore. So arquivos gitignored sao copiados.
+#
+# REGRA INEGOCIAVEL: nunca listar o .env real aqui.
+# O auto mode permite ler .env e mandar credencial para a API correspondente,
+# entao um .env de producao dentro do worktree = agente com acesso a producao.
+
+.env.agent
+.env.test

@@ -1,0 +1,15 @@
+# A SUA configuracao. O template versionado e o registry.example.yaml.
+# Sem esta linha, publicar o repo publica o nome dos seus clientes.
+registry.yaml
+
+# Segredos nunca moram aqui. O token do Linear fica no ~/.zshenv.
+.env
+.env.*
+!.env.example
+*.local
+
+# Estado de execucao: locks, marcadores. Local por natureza.
+state/
+PAUSE
+
+.DS_Store
