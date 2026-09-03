@@ -57,8 +57,8 @@ for e,v in (d.get("companies") or {}).items():
 for e,v in (d.get("companies") or {}).items():
   for n,r in (v.get("repos") or {}).items():
     if r.get("gate"): print(n)')
-    if [ -z "$COM_GATE" ]; then ok "gate: [] em todos os repos (execucao zero)"
-    else aviso "repo com gate nao vazio" "$(echo "$COM_GATE" | tr '\n' ' ')"; fi
+    if [ -z "$COM_GATE" ]; then ok "gate: [] em todos os repos (nenhum comando roda)"
+    else ok "repos com gate ativo: $(echo "$COM_GATE" | tr '\n' ' ')"; fi
 
     SEM_ID=$(reg '
 for e,v in (d.get("companies") or {}).items():

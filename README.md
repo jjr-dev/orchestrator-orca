@@ -332,26 +332,149 @@ Ele limpa também as pastas de anexo, por uma regra mais frouxa: sai o que está
 `Done` ou sumiu do Linear. Apagar anexo não perde nada — o arquivo veio do
 Linear e é baixado de novo quando precisar.
 
-## Imagem anexada no ticket
+## Gates: comandos que precisam passar antes do PR
 
-Screenshot de bug e mockup chegam até o worker. `uploads.linear.app` não é URL
-pública — devolve 401 sem a chave — então colar a URL no prompt não adianta. O
-caminho é baixar autenticado e apontar o arquivo local:
+Por padrão o worker **não executa nada** do seu projeto — nem lint, nem teste,
+nem build. Ele entrega planejamento e código, e a verificação fica com você. É
+por isso que todo repo nasce com `gate: []`.
+
+O campo `gate` liga isso por repositório. Com comandos na lista, o worker roda
+exatamente aqueles antes de commitar, e **não pode reportar sucesso se algum
+falhar**.
+
+```yaml
+"Acme - API":
+  gate:                      # roda automaticamente, antes do commit
+    - npm run lint
+    - npm run typecheck
+  manual:                    # roteiro para VOCE; o agente so transcreve no PR
+    - npm test
+    - docker compose up
+    - npm run test:e2e
+```
+
+O resultado vai para o corpo do PR:
+
+```
+### Gate
+| Comando | Resultado |
+|---|---|
+| npm run lint | ok |
+| npm run typecheck | FALHOU — 2 erros, ver abaixo |
+```
+
+Se um comando falhar e o worker não conseguir consertar, ele abre o PR com a
+falha transcrita e reporta `failed`. Um PR honesto com o problema escrito vale
+mais que um worker girando em círculo — mas ele não passa por concluído.
+
+### O que colocar no `gate`, e o que deixar no `manual`
+
+| Vai no `gate` | Fica no `manual` |
+|---|---|
+| barato e rápido (segundos) | demorado (minutos) |
+| determinístico | intermitente |
+| não precisa de serviço externo | precisa de banco, container, rede |
+| lint, typecheck, build | e2e, integração, migration, servidor de dev |
+
+O motivo de e2e ficar de fora não é ideologia: cada worker é uma sessão
+completa, e suítes que sobem um processo por núcleo derrubam a máquina quando
+há vários workers ao mesmo tempo.
+
+### Regras que o worker segue
+
+- **Só os comandos da lista.** Ele não acrescenta um `npm ci` porque faltou
+  dependência, e não varia o comando porque "faria mais sentido".
+- **Falhou por causa do código?** Ele conserta o que for trivial e roda de novo.
+  O que exige decisão de desenho vira pendência no PR.
+- **Falhou por ambiente** — binário ausente, dependência não instalada? Ele
+  marca `não rodou` com o motivo e segue. Não instala nada.
+- **Nunca reporta ok sem ter rodado.** Em repo sem CI, esse bloco é o único
+  registro de que algo foi verificado.
+
+A ausência da seção `### Gate` no PR significa "este repo não tem gate", nunca
+"rodou e passou".
+
+### Ligar num repo existente
+
+Gate não é modelo, então não passa pelo `/orchestrator-models`. Edite
+`gate` no `registry.yaml` direto. Depois confira:
+
+```bash
+./bin/registry-edit.py show
+./bin/doctor.sh          # lista quais repos tem gate ativo
+```
+
+## Imagens do ticket chegam ao agente
+
+Screenshot de bug e mockup de tela funcionam — mas não pelo caminho óbvio.
+
+`uploads.linear.app` **não é URL pública**: devolve 401 sem a chave da API.
+Colar a URL no prompt não adianta, e nenhum `WebFetch` leria a imagem mesmo que
+a URL abrisse. O único caminho é baixar autenticado e abrir o arquivo local.
 
 ```bash
 bin/linear-assets.sh <IDENT>
 ```
 
-Varre descrição, comentários e anexos, baixa tudo e imprime o caminho local.
-Onde ele grava sai de `defaults.assets_root` no registry (veja
-`bin/assets-root.sh`), e precisa ser **fora de qualquer repositório git** para o
-anexo não ser commitado por acidente.
+Varre descrição, comentários e anexos do ticket, baixa tudo, e imprime o caminho
+local ao lado da URL de origem. Sem anexo, diz `nenhum anexo` e sai limpo.
 
-## Ticket pai acompanha os filhos
+Três pontos do fluxo olham a imagem, e a ordem importa:
 
-Quando o escopo atravessa repos, o ticket vira pai com uma sub-issue por
-repositório. O pai não tem worker nem PR — quem define o estado dele são os
-filhos:
+| Onde | O que faz |
+|---|---|
+| triagem | baixa e **olha** antes de escrever a especificação |
+| despacho | detecta imagem na descrição e manda a linha de download no prompt |
+| worker | baixa e abre antes de planejar; o planner também vê |
+
+**A triagem é o elo frágil.** Ela reescreve a descrição inteira — se não repetir
+a marcação da imagem, o anexo some do ticket antes de o despacho saber que
+existiu.
+
+Onde os arquivos ficam sai de `defaults.assets_root` no registry. Precisa ser
+**fora de qualquer repositório git**, para o anexo nunca ser commitado por
+acidente:
+
+```yaml
+defaults:
+  assets_root: ~/.orch-assets
+```
+
+Aceita `~` e pode apontar para um volume externo — nesse caso os scripts checam
+se está montado antes de gravar. Sem essa checagem, um volume desmontado viraria
+um diretório comum e tudo pareceria funcionar.
+
+## Sub-tasks: um ticket por repositório
+
+Quando um pedido atravessa mais de um repositório, a triagem propõe quebrar em
+**ticket pai + uma sub-issue por repo**, com o contrato de API entre eles escrito
+no pai.
+
+```
+ACME-138  "Checkout recorrente"          <- pai: contrato, sem worker, sem PR
+   ACME-139  Repo/Acme - API             <- filho: worker proprio, PR proprio
+   ACME-140  Repo/Acme - Web             <- filho: worker proprio, PR proprio
+```
+
+Cada filho tem sua etiqueta `Repo/`, seu worktree, seu worker e seu PR. O pai
+não tem nenhum — ele é derivado.
+
+### 🔴 Você aprova cada filho, não o pai
+
+Este é o ponto que confunde: mover o **pai** para `Ready for Agent` não despacha
+nada. O despacho olha os filhos, e cada filho precisa estar em
+`Ready for Agent` por conta própria.
+
+```
+ACME-138  Drafted            <- o pai fica aqui, e tudo bem
+   ACME-139  Ready for Agent <- este vai ser despachado
+   ACME-140  Drafted         <- este NAO vai
+```
+
+É deliberado: cada repositório é uma decisão separada, e às vezes você quer a
+API antes do front. Se quiser os dois juntos, mova os dois.
+
+### O pai se move sozinho, a partir dos filhos
 
 | Filhos (ignorando `Draft`/`Drafting`/`Drafted`) | Pai vai para |
 |---|---|
@@ -359,9 +482,27 @@ filhos:
 | todos em `In Review` ou adiante | `In Review` |
 | todos em `Done` | `Done` |
 
-Filho em `Ready for Agent` segura o pai: ele é "aprovado e ainda não arrancou".
-O script **só anda para frente** — se a conta der para trás ele reporta e não
-mexe, porque voltar estado desfaria uma decisão sua.
+Filho em `Ready for Agent` **segura** o pai: ele é "aprovado e ainda não
+arrancou", então a onda não entrou em progresso. Filho em `Drafted` não conta —
+não foi aprovado.
+
+O pai **só anda para frente**. Se você reabrir um filho e a conta der para trás,
+o script reporta e não mexe: voltar estado desfaria uma decisão sua.
+
+### Etiqueta `Stack/` evita repetir
+
+Quando a mesma combinação de repos se repete, crie uma `Stack/`:
+
+```yaml
+stacks:
+  "Acme - API/Web":
+    - "Acme - API"
+    - "Acme - Web"
+```
+
+Aí um toque na etiqueta, do celular, já diz "este ticket atravessa estes repos"
+— sem escrever nada no corpo do ticket. Lembre que os filhos entram todos na
+mesma onda e ocupam as vagas do `wip_max` da empresa.
 
 ## Push para branch protegida
 

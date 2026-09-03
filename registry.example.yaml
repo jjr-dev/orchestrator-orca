@@ -187,7 +187,16 @@ companies:
         base: origin/main
         # documentacao para o HUMANO. O agente NUNCA executa isto.
         setup: npm ci
-        # politica de execucao zero. Ver o cabecalho.
+        # Comandos que o worker roda ANTES de commitar. Lista vazia (o padrao)
+        # = nada roda, e a verificacao fica toda no `manual` abaixo. Com
+        # comandos, o worker roda exatamente estes, na ordem, e nao pode
+        # reportar sucesso se algum falhar.
+        #
+        # Ponha aqui so o que e barato, deterministico e nao precisa de servico
+        # externo. Teste que sobe banco ou container pertence ao `manual`.
+        #   gate:
+        #     - npm run lint
+        #     - npm run typecheck
         gate: []
         # o roteiro de verificacao humana. O worker transcreve no PR, sem saida,
         # porque nao rodou nada.

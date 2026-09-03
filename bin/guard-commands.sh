@@ -28,8 +28,9 @@ grep -Eq '(^|[;&|(`[:space:]])(podman|kubectl|helm)([[:space:]]|$)'     <<<"$CMD
 grep -Eq 'playwright|cypress|(^|[[:space:]])k6([[:space:]]|$)'          <<<"$CMD" && block "suite e2e / carga"
 grep -Eq 'test:e2e|test:integration|:e2e([[:space:]]|$)'                <<<"$CMD" && block "suite e2e / integracao"
 
-# Politica de zero execucao: `gate` esta vazio no registry de proposito.
-# O worker entrega planejamento e codigo; teste e validacao sao humanos.
+# Este hook vale para o PAINEL, que nunca precisa rodar comando de projeto.
+# O `gate` do registry e opt-in por repo e roda no WORKER, noutro worktree, onde
+# este hook nao chega — entao ele nao conflita com gate nenhum.
 # Motivo adicional: memoria. jest/vitest sobem ~1 worker por nucleo, e um
 # servidor de dev fica vivo indefinidamente — com varios workers simultaneos
 # isso derruba a maquina antes de qualquer docker.

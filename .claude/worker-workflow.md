@@ -19,9 +19,17 @@ uma para a outra.
 
 Nem lint, typecheck, build, teste, migration, servidor de dev — **nem instalar
 dependencia** (`npm ci`, `yarn install`, `composer install`, `flutter pub get`).
-O hook bloqueia todos, e tentar contornar tambem.
 
-Este fluxo entrega **planejamento e codigo**. A verificacao e humana.
+Por padrao este fluxo entrega **planejamento e codigo**, e a verificacao e
+humana.
+
+**A unica excecao e o `gate` do repo.** Se o registry declarar comandos em
+`gate` para o repo deste ticket, voce roda **exatamente aqueles**, no passo 4, e
+nada alem. Um comando que nao esta na lista continua proibido, mesmo que pareca
+obviamente necessario — inclusive instalar dependencia. Se o gate precisa de algo
+que nao esta instalado, isso e problema de ambiente: reporte, nao resolva.
+
+Repo com `gate: []` — o padrao — nao roda nada. Continua valendo tudo acima.
 
 Se algo parecer quebrado, **descreva no PR** — nao rode para conferir.
 
@@ -286,7 +294,49 @@ ele nao percebe.
 Limpar comentario alheio incha o diff com mudanca que ninguem pediu e esconde o
 que o ticket realmente fez.
 
-### 4. Nao rode nada — ver secao 1
+### 4. Rode o `gate` do repo, se houver
+
+Olhe o campo `gate` do seu repo no registry. O prompt traz essa lista; na duvida:
+
+```bash
+<ORCH_ROOT>/bin/registry-edit.py show --json | jq -r '
+  .companies[].repos["<NOME DO REPO>"].gate[]?'
+```
+
+**Lista vazia:** nao rode nada e siga para o 4b. E o padrao, e e a maioria.
+
+**Lista com comandos:** rode cada um, na ordem, na raiz do worktree. Regras:
+
+1. **Somente os comandos da lista.** Nada de acrescentar um `npm ci` porque
+   faltou dependencia, nada de trocar `npm test` por `npm test -- --watch=false`
+   porque pareceu melhor. A lista e contrato.
+2. **Falhou por causa do seu codigo?** Conserte e rode de novo. Erro trivial
+   (import, tipo, formatacao) e para consertar; erro que exige decisao de
+   desenho vai para o corpo do PR como pendencia.
+3. **Falhou por ambiente** (binario ausente, dependencia nao instalada, servico
+   fora do ar)? **Nao instale nada.** Marque o comando como `nao rodou` com o
+   motivo, e siga — isto e problema de maquina, nao do ticket.
+4. **Nunca reporte um comando como ok sem ter rodado.** Em repo sem CI este
+   bloco e o unico registro de que algo foi verificado.
+
+Transcreva o resultado no corpo do PR, exatamente neste formato:
+
+```
+### Gate
+| Comando | Resultado |
+|---|---|
+| npm run lint | ok |
+| npm run typecheck | ok |
+| npm test | FALHOU — 2 testes, ver abaixo |
+```
+
+**Se algum comando da lista falhou e voce nao conseguiu consertar**, abra o PR
+mesmo assim com a falha transcrita, e reporte `failed` no passo 9. PR honesto
+com o problema escrito vale mais que worker girando em circulo — mas ele **nao**
+pode ser reportado como sucesso.
+
+A ausencia da secao `### Gate` no PR deve significar "o repo nao tem gate",
+nunca "rodou e passou".
 
 ### 4b. Review com contexto limpo, antes de commitar
 
