@@ -34,6 +34,22 @@ renomeia uma etiqueta, e o registry continua com o nome velho. Nada quebra,
 nenhum erro aparece, e os tickets daquele repo simplesmente param de ser
 roteados.
 
+## 0. Etiquetas primeiro — isso e automatico
+
+```bash
+./bin/sync-labels.sh            # o que falta
+./bin/sync-labels.sh --apply    # cria Repo/, Stack/, Risk/ e Fast Track
+```
+
+Ele deriva tudo do registry: um `Repo/` por repo, um `Stack/` por chave em
+`stacks`, os tres `Risk/`, e a `Fast Track` plana. Cria o grupo antes do filho
+quando o grupo tambem falta.
+
+**Nunca apaga.** Etiqueta orfa — existe no Linear e nao no registry — sai no
+relatorio para voce decidir, porque apagar leva junto o vinculo com os tickets.
+
+Depois disso, o que sobra sao as divergencias que exigem julgamento.
+
 ## 1. Colete as tres pontas
 
 ```bash
@@ -60,12 +76,13 @@ Seis divergencias, e cada uma tem um sintoma diferente:
 
 | Divergencia | Sintoma no dia a dia | Conserto |
 |---|---|---|
-| repo no registry, sem etiqueta `Repo/` | ticket daquele repo nunca e despachado | criar a etiqueta |
+| repo no registry, sem etiqueta `Repo/` | ticket daquele repo nunca e despachado | `sync-labels.sh --apply` |
 | etiqueta `Repo/` sem repo no registry | ticket etiquetado da erro na resolucao | criar o repo, ou apagar a etiqueta |
 | `orca_repo_id` que nao existe mais no Orca | despacho falha com `selector_not_found` | reregistrar e atualizar o id |
 | estado do workflow renomeado | o precheck do cron para de disparar, mudo | recriar o estado com o nome exato |
-| `Risk/<nivel>` faltando | tickets daquele nivel caem no fallback (o mais caro) | criar a etiqueta |
+| `Risk/<nivel>` faltando | tickets daquele nivel caem no fallback (o mais caro) | `sync-labels.sh --apply` |
 | `stacks:` citando repo que nao esta em `repos:` | ticket de stack quebra no meio | corrigir o registry |
+| stack no registry, sem etiqueta `Stack/` | nao da para marcar o ticket como multi-repo | `sync-labels.sh --apply` |
 
 Compare **nomes exatos**, sem normalizar caixa nem espaco. `Acme - API` e
 `Acme  - API` sao repos diferentes para a resolucao, e e justamente esse tipo de

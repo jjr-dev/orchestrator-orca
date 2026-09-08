@@ -100,6 +100,17 @@ com o caminho real resolvido:
 Nao e segredo, mas continua sendo o shell dele — nao escreva no lugar dele.
 Vale a mesma ressalva do token: **o Orca so enxerga depois de reiniciar.**
 
+## Passo 4c — Etiquetas do registry
+
+Depois que os repos entraram, gere as etiquetas de uma vez:
+
+```bash
+./bin/sync-labels.sh --apply
+```
+
+Cria `Repo/` para cada repo, `Stack/` para cada chave em `stacks`, os tres
+`Risk/` e a `Fast Track`. Idempotente: so cria o que falta.
+
 ## Passo 5 — Subagentes
 
 ```bash

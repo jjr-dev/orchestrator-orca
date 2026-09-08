@@ -124,7 +124,17 @@ for e,v in (d.get('companies') or {}).items():
   for n in (v.get('repos') or {}):
     if n not in labels: print(n)")
       [ -z "$SEM_LABEL" ] && ok "todo repo do registry tem etiqueta Repo/ no Linear" \
-        || falha "repo sem etiqueta Repo/ correspondente" "$(echo "$SEM_LABEL" | tr '\n' ' ')— ticket nunca sera roteado"
+        || falha "repo sem etiqueta Repo/ correspondente" "$(echo "$SEM_LABEL" | tr '\n' ' ')— ticket nunca sera roteado; rode ./bin/sync-labels.sh --apply"
+
+      SEM_STACK=$(jq -r '[.data.teams.nodes[0].labels.nodes[]|select(.parent.name=="Stack")|.name]|join("\n")' <<<"$RESP" \
+        | py "
+import sys,yaml
+labels=set(l.strip() for l in sys.stdin if l.strip())
+d=yaml.safe_load(open('registry.yaml'))
+for n in (d.get('stacks') or {}):
+  if n not in labels: print(n)")
+      [ -z "$SEM_STACK" ] && ok "toda stack do registry tem etiqueta Stack/ no Linear" \
+        || falha "stack sem etiqueta Stack/" "$(echo "$SEM_STACK" | tr '\n' ' ')— rode ./bin/sync-labels.sh --apply"
     fi
   fi
 fi

@@ -120,6 +120,76 @@ Três detalhes que já custaram tempo:
 - **Se você colar o token no chat, ele vazou** para o transcript. Revogue e gere
   outro.
 
+## O que isso cria no seu Linear
+
+O setup **escreve no seu workspace**. Nada é destrutivo e nada é apagado, mas
+vale saber exatamente o que aparece antes de confirmar.
+
+### Estados do workflow
+
+Nove estados, criados no time que você escolher. Os que já existirem são
+reaproveitados — nada é renomeado.
+
+```
+Draft -> Drafting -> Drafted -> Ready for Agent -> Scheduled
+  -> In Progress -> In Review -> Manual QA -> Done
+```
+
+| Estado | `type` | Quem move |
+|---|---|---|
+| `Draft` | backlog | você — é onde a ideia entra |
+| `Drafting` | backlog | a triagem, ao pegar o ticket |
+| `Drafted` | backlog | a triagem, ao terminar |
+| `Ready for Agent` | unstarted | **você — este é o Start** |
+| `Scheduled` | started | o coordenador, ao despachar |
+| `In Progress` | started | o worker |
+| `In Review` | started | o worker, ao abrir o PR |
+| `Manual QA` | started | o coordenador |
+| `Done` | completed | **você**, depois do merge |
+
+Os estados nativos do Linear (`Backlog`, `Todo`, `Canceled`, `Duplicate`)
+continuam intactos e podem seguir em uso.
+
+⚠️ **Nunca renomeie um desses estados depois.** Os prechecks casam por nome
+exato — renomear pela interface mata o disparo do cron **em silêncio**, sem erro
+em lugar nenhum.
+
+### Etiquetas
+
+Todas derivam do `registry.yaml`, e são criadas por um comando só:
+
+```bash
+./bin/sync-labels.sh            # mostra o que falta
+./bin/sync-labels.sh --apply    # cria
+```
+
+| Grupo | Vem de | Exemplo |
+|---|---|---|
+| `Repo/` | uma por repo em `companies.*.repos` | `Repo/Acme - API` |
+| `Stack/` | uma por chave em `stacks` | `Stack/Acme - API/Web` |
+| `Risk/` | fixo: `high`, `medium`, `low` | `Risk/high` |
+| `Fast Track` | fixo, **sem grupo** | — |
+
+Grupos no Linear são exclusivos: um ticket tem no máximo um `Repo/`, um `Risk/`
+e um `Stack/`. `Fast Track` é plana porque `Status` é nome reservado no Linear —
+um grupo com esse nome é recusado pela API.
+
+🔴 **O nome da etiqueta e a chave do registry precisam ser idênticos**, byte a
+byte. É a chave da resolução inteira: divergir num espaço deixa todo ticket
+daquele repo invisível para o coordenador, sem erro nenhum. É por isso que quem
+cria é o script, e não você na interface.
+
+### O que ele nunca faz
+
+- **Não apaga etiqueta.** Uma etiqueta órfã — existe no Linear e não no registry
+  — sai no relatório para você decidir. Apagar levaria junto o vínculo com os
+  tickets que a usam, sem volta.
+- **Não renomeia estado.** Se faltar um, ele cria; se houver um parecido com
+  outro nome, ele reporta e deixa a migração com você.
+- **Não mexe em ticket.** Só em estados e etiquetas.
+
+Rodar de novo é seguro: ele compara e cria só o que falta.
+
 ## Passo 5 — O que só você consegue fazer
 
 O setup termina aqui, e **sem estes itens o sistema fica mudo**:

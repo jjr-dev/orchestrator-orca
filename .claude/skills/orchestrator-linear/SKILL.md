@@ -110,17 +110,22 @@ Draft -> Drafting -> Drafted -> Ready for Agent -> Scheduled
   -> In Progress -> In Review -> Manual QA -> Done
 ```
 
-| Estado | `type` | `position` | Quem move |
+| Estado | `type` | ordem dentro do `type` | Quem move |
 |---|---|---|---|
-| `Draft` | backlog | 0.3 | humano (escreve a ideia) |
-| `Drafting` | backlog | 0.5 | a triagem — **e o claim dela** |
-| `Drafted` | backlog | 0.7 | a triagem, ao terminar |
-| `Ready for Agent` | unstarted | 1.5 | **humano — e o Start** |
-| `Scheduled` | started | 1.9 | o coordenador — **e o lock** |
-| `In Progress` | started | 2 | o worker |
-| `In Review` | started | 3 | o worker |
-| `Manual QA` | started | 4 | o coordenador |
-| `Done` | completed | 5 | humano (o merge dispara) |
+| `Draft` | backlog | 1º | humano (escreve a ideia) |
+| `Drafting` | backlog | 2º | a triagem — **e o claim dela** |
+| `Drafted` | backlog | 3º | a triagem, ao terminar |
+| `Ready for Agent` | unstarted | depois de `Todo` | **humano — e o Start** |
+| `Scheduled` | started | 1º | o coordenador — **e o lock** |
+| `In Progress` | started | 2º | o worker |
+| `In Review` | started | 3º | o worker |
+| `Manual QA` | started | 4º | o coordenador |
+| `Done` | completed | — | humano (o merge dispara) |
+
+**O que importa e o `type` e a ordem relativa, nao o numero.** O Linear atribui
+`position` sozinho e renumera quando voce arrasta no board — uma instalacao real
+pode ter `In Review` em 1002 e `Done` em 3 sem nenhum problema. Ao criar, passe
+`position` crescente dentro de cada `type`; depois nao tente "corrigir" numero.
 
 ⚠️ **`position` ordena DENTRO do grupo de `type`, nao globalmente.** Por isso os
 tres da triagem sao todos `backlog`, mesmo `Drafting` sendo "trabalho
@@ -165,9 +170,23 @@ plana.
 # e depois cada filho, com parentId = o id devolvido acima
 ```
 
-As etiquetas `Repo/` **nao se criam aqui**: cada uma nasce junto com o repo, em
-`/orchestrator-repo-add`, porque o nome precisa ser identico a chave do registry
-e criar nos dois lugares separadamente e como divergem.
+### Nao crie etiqueta a mao — use o script
+
+`Repo/`, `Stack/`, `Risk/` e `Fast Track` saem todas do registry, por um comando
+so. Ele compara e cria o que falta:
+
+```bash
+./bin/sync-labels.sh            # mostra o que falta
+./bin/sync-labels.sh --apply    # cria
+```
+
+O nome da etiqueta precisa ser **identico byte a byte** a chave do registry — e a
+chave da resolucao inteira, e divergir num espaco deixa todo ticket daquele repo
+invisivel, sem erro nenhum. Comparacao de string nao e trabalho para o julgamento
+do agente da vez.
+
+Ele **nunca apaga**. Etiqueta orfa e reportada para o humano decidir, porque
+apagar leva junto o vinculo com os tickets que a usam.
 
 ## 7. Verifique
 
