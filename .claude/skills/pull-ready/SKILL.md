@@ -247,7 +247,8 @@ O prompt contem:
 - o contrato de API do ticket pai, inline, quando existir
 - a lista `manual` do repo, literal, com a instrucao explicita de NAO executar
   nenhum deles — ela vai para o corpo do PR como roteiro de verificacao
-- a instrucao de que `gate` esta vazio de proposito: o worker nao roda nada
+- o `gate` do repo: a lista quando houver, ou a instrucao explicita de que
+  esta vazio e nada deve ser executado
 - o workflow de entrega (abaixo)
 - quando o ticket consome codigo de um irmao ja mergeado: diga isso em uma linha
   ("origin/main ja contem X de ACME-411 — reutilize, nao reimplemente")

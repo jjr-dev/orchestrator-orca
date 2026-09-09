@@ -9,8 +9,9 @@ registry, despachar workers em worktrees de outros repositorios e cuidar dos gat
 1. Nunca faca merge. O merge e humano, sempre.
 2. O worker NAO executa comando nenhum do projeto. Nem docker, nem migration,
    nem teste, nem servidor de dev, nem os estaticos (lint, typecheck, build).
-   `gate` esta vazio no registry de proposito: entregamos planejamento e codigo,
-   a verificacao e humana.
+   O `gate` do repo e a unica excecao, e e opt-in: onde o registry declara
+   comandos, o worker roda **exatamente aqueles** e nada alem. Onde esta vazio —
+   o padrao — entregamos planejamento e codigo, e a verificacao e humana.
    Tambem nao instala dependencia: `npm install` reescreve o lockfile e isso
    vira mudanca nao pedida no PR. Nem instala runtime na maquina.
    **Correcao de 29/08:** por muito tempo esta linha dizia que o hook impunha
@@ -166,9 +167,10 @@ despacha — sem passar por `Ready for Agent`.
     bloco de RETOMADA faz o worker herdar o `effortLevel` global em vez do teto
     que o risco escolheu, sem erro nenhum.
 23. O reviewer e no minimo tao capaz quanto o implementador, sempre, e nunca
-    abaixo do `effortLevel` global. Com `gate: []` ele e a unica verificacao
-    automatica entre o codigo e voce, e a unica que olha o diff com contexto
-    limpo — sem a memoria de ter escrito aquilo. **Ele nao pega tudo**: le o
+    abaixo do `effortLevel` global. Onde o `gate` esta vazio ele e a unica
+    verificacao automatica entre o codigo e voce; onde existe, o gate cobre so a
+    lista e nada dele julga desenho. Ele e sempre o unico que olha o diff com
+    contexto limpo — sem a memoria de ter escrito aquilo. **Ele nao pega tudo**: le o
     diff que existe, nao o que deixou de ser escrito. Duplicacao em vez de
     reuso passa no review e apodrece.
 24. **Nunca fixe modelo nem effort do implementador na skill.** A tabela na
@@ -221,3 +223,15 @@ despacha — sem passar por `Ready for Agent`.
 33. Antes de declarar qualquer configuracao pronta, rode `./bin/doctor.sh`. Nao
     encerre com FALHA aberta: instalacao "quase pronta" que ninguem terminou e
     exatamente como este sistema falha em silencio.
+34. **Toda pergunta ao humano vem com a resposta que voce daria, colada nela.**
+    Vale para a triagem, o planner, o worker e voce:
+
+    ```
+    **<pergunta fechada, respondivel com uma palavra>**
+    **Recomendo: <resposta>.** <uma linha de por que.>
+    ```
+
+    O ponto e o silencio significar concordancia: quem le no celular so responde
+    quando discorda. Pergunta sem recomendacao trava o trabalho ate alguem ter
+    tempo de pensar — e ninguem tem. Se voce nao consegue recomendar, faltou
+    ler: volte e leia, em vez de terceirizar a decisao.

@@ -206,11 +206,12 @@ Sem anexo ele diz `nenhum anexo em <IDENT>` e sai limpo — nao e erro, siga.
 tentar `WebFetch` na URL, nem colar a URL na descricao esperando que alguem
 adiante consiga abrir. So o arquivo local funciona.
 
-**Os arquivos vao para o SSD externo**, em ``$(bin/assets-root.sh)`/<IDENT>/`,
-fora de qualquer repositorio git. E de proposito: nao ocupam o disco interno e
-nao ha como serem commitados por acidente. Se o SSD estiver desmontado o script
-para com exit 2 em vez de escrever no disco interno — se isso acontecer, reporte
-e siga sem a imagem, dizendo no comentario que nao conseguiu ver o anexo.
+**Os arquivos vao para fora de qualquer repositorio git**, no destino que
+`defaults.assets_root` define (`./bin/assets-root.sh` resolve). E de proposito:
+nao ha como serem commitados por acidente. Se o destino for um volume externo e
+ele estiver desmontado, o script para com exit 2 em vez de gravar no lugar
+errado — se isso acontecer, reporte e siga sem a imagem, dizendo no comentario
+que nao conseguiu ver o anexo.
 
 ## Passo 2 - Descobrir o repositorio
 
@@ -260,7 +261,9 @@ O objetivo e que o texto seja excecao e a etiqueta seja a regra.
 
 Se nao tem, deduza pelo texto e pelo registry, e **proponha** a etiqueta no
 comentario. Nao aplique sozinho quando houver mais de um candidato plausivel:
-pergunte no comentario, em uma linha, com as opcoes.
+pergunte no comentario, em uma linha, com as opcoes **e a sua recomendacao** —
+e aplique a recomendada. Pergunta sem resposta sugerida trava o ticket ate
+alguem ter tempo de pensar; com resposta, ela so trava se alguem discordar.
 
 ## Passo 3 - Ler o codigo antes de escrever
 
@@ -535,13 +538,18 @@ identificadores dos filhos criados.
    que acabou de ser redigido. Loop.
 
 3. Comente no ticket, curto, em no maximo 5 linhas: o que voce assumiu e o que
-   ficou em aberto. Perguntas em formato de lista, respondiveis com uma palavra —
-   ele vai ler isso no celular.
+   ficou em aberto. Ele vai ler isso no celular.
 
-   Quando houver pergunta, feche o comentario com a instrucao do ciclo:
+   **Toda pergunta vem com a sua resposta ao lado.** A spec ja foi escrita
+   assumindo a recomendacao — quem concorda nao responde nada, so aprova:
 
-   > Para eu incorporar: responda neste comentario e **mova o ticket de volta
-   > para `Draft`**. Na proxima passagem da triagem eu leio e refaco.
+   > **Aplico o desconto antes ou depois do frete?**
+   > **Recomendo: antes.** E o que a tela de checkout ja mostra hoje.
+   > A spec assume isso. Se discordar, responda e mova para `Draft`.
+
+   Pergunta fechada, respondivel com uma palavra. "Como tratar o desconto?" nao
+   serve. E nunca deixe pergunta sem recomendacao: se voce nao consegue
+   recomendar, faltou ler o codigo — volte e leia.
 
 4. **Mova para `Drafted`.** E o ultimo passo, depois do comentario:
 

@@ -89,6 +89,19 @@ Alternativa descartada: <o que> — <por que nao>.
   igualmente plausiveis
 - e trade-off de seguranca ou compliance que o humano tem que assumir
 
+**Levantar duvida nao e parar.** Mesmo nos casos acima voce escolhe, executa e
+registra — com a decisao colada na pergunta, para quem le poder so concordar em
+silencio:
+
+```
+**<pergunta fechada, respondivel com uma palavra>**
+**Recomendo: <resposta>.** <uma linha de por que.>
+Segui com a recomendacao. Se discordar, responda no ticket.
+```
+
+A unica excecao e acao destrutiva e irreversivel: ai voce **nao executa**, deixa
+o resto pronto, e escreve a pergunta no mesmo formato para o humano decidir.
+
 **Contradicao entre a spec e os criterios de aceite NAO e motivo para perguntar.**
 Resolva pela intencao: escolha a leitura que preserva o criterio mais forte,
 implemente, registre. O review do PR e o portao real.
@@ -165,13 +178,13 @@ vai construir; planejar so pelo texto produz codigo que resolve outra coisa.
 Nao tente abrir a URL `uploads.linear.app` direto: ela devolve 401 sem a chave
 da API, e o `WebFetch` nao le imagem nem quando a URL abre.
 
-Os arquivos ficam em ``$(bin/assets-root.sh)`/<IDENT>/`, **fora
-do worktree**. Nao copie para dentro dele: fora do repositorio nao existe risco
-de entrarem no commit, e nao ha nada para apagar depois.
+Os arquivos ficam **fora do worktree**, num diretorio que o proprio script
+resolve. Nao copie para dentro dele: fora do repositorio nao existe risco de
+entrarem no commit, e nao ha nada para apagar depois.
 
-Se o script parar com `volume nao esta montado`, o SSD externo caiu. Nao
-improvise: comente no ticket que nao conseguiu ver o anexo e siga com o texto,
-dizendo isso no corpo do PR.
+Se o script parar com `volume nao esta montado`, o destino configurado em
+`defaults.assets_root` esta indisponivel. Nao improvise: comente no ticket que
+nao conseguiu ver o anexo e siga com o texto, dizendo isso no corpo do PR.
 
 Depois de mover, espelhe o estado no worktree — e o que faz o painel do Orca
 mostrar em que pe esta cada aba:
@@ -192,8 +205,16 @@ grep -qxF 'PLAN.md' "$EX" || echo 'PLAN.md' >> "$EX"
 ```
 
 **Voce nao escreve este plano — o `orch-planner` escreve.** Chame o subagente
-`orch-planner` com a especificacao do ticket, o `<IDENT>`, e o caminho do
-worktree. Ele roda em Opus, le o codigo e deixa o `PLAN.md` na raiz.
+`orch-planner` passando:
+
+- a especificacao do ticket, inteira
+- o `<IDENT>`
+- o caminho absoluto do worktree
+- **o caminho local de cada imagem** que o passo 1b baixou, se houver
+
+Ele roda em Opus, le o codigo e deixa o `PLAN.md` na raiz. Ele esta no worktree
+do cliente, onde os scripts do orquestrador nao existem: o que voce nao passar,
+ele nao tem como buscar.
 
 Voce roda em Opus com o teto de raciocinio que o risco do ticket escolheu:
 `xhigh` em `Risk/high`, um degrau abaixo em `medium`, dois em `low`. A divisao
@@ -251,9 +272,22 @@ do humano.
 
 ### 3. Implemente somente o escopo do ticket
 
-Leia os arquivos antes de editar. Antes de criar qualquer coisa nova — funcao,
-helper, componente, hook, tipo — procure se ja existe no repo. Codigo duplicado
-passa no review e apodrece.
+Leia os arquivos antes de editar.
+
+**As decisoes de desenho ja foram tomadas — nao as refaca.** O `PLAN.md` diz o
+que reusar, o que criar, e com quais assinaturas. Ele foi escrito por quem leu o
+repo inteiro antes; voce nao tem esse contexto. Use os nomes e tipos do bloco de
+interfaces **exatamente como estao** — inventar nome ali quebra o passo seguinte.
+
+**Se o plano nao mencionar algo**, siga o vizinho: o proprio plano registrou os
+padroes do repo na secao de padroes. Nao invente uma terceira forma.
+
+**Se o plano estiver errado, pare — nao siga ate a parede.** Plano que manda
+criar o que ja existe, que cita arquivo inexistente, ou cujo passo nao e possivel
+como escrito: implemente o que esta CERTO, e registre a divergencia no corpo do
+PR, dizendo o que o plano pedia e por que voce fez diferente. Desvio com
+resultado correto nao e falha, e o revisor sabe disso. Obediencia a um plano
+quebrado e.
 
 #### Nao escreva comentario explicativo
 
@@ -350,17 +384,30 @@ plano de outro. Sem este passo o proximo par de olhos e o humano.
 | Veredito | O que fazer |
 |---|---|
 | aprovado | siga para o passo 5 |
-| aprovado com ressalvas | siga; transcreva as ressalvas no corpo do PR |
+| aprovado com ressalvas | siga; leve as ressalvas para "Pontos de atencao" |
 | reprovado | corrija os bloqueantes e chame o `orch-reviewer` **de novo** |
 
 **No maximo duas rodadas de reprovacao.** Se na terceira ainda houver
 bloqueante, **nao fique tentando**: abra o PR mesmo assim, transcreva os
-bloqueantes abertos em `## Review automatico` e reporte `worker_done` com
-`--outcome failed`. Um PR honesto com o problema escrito e util; um worker
-girando em circulo consome a leva inteira e nao entrega nada.
+bloqueantes abertos em "Pontos de atencao" — o problema, nao o veredito — e
+reporte `worker_done` com `--outcome failed`. Um PR honesto com o problema
+escrito e util; um worker girando em circulo consome a leva inteira e nao
+entrega nada.
 
 Nao discuta o veredito com ele. Se voce acha que o bloqueante esta errado,
-registre isso no corpo do PR e siga — quem arbitra e o humano, no review.
+registre o ponto no PR e siga — quem arbitra e o humano, no review.
+
+**O veredito completo vai para o comentario do ticket, nao para o PR.** O
+registro de que o review rodou tem que existir; o PR e para quem revisa a
+mudanca, e o processo interno nao interessa a ele.
+
+```bash
+orca linear comment add <IDENT> --body "Review: <veredito>
+<ressalvas e bloqueantes, um por linha>" --json
+```
+
+Comente **sempre**, inclusive quando aprovado sem ressalva. A ausencia do
+comentario deve significar "o review nao rodou", nunca "passou".
 
 ### 5. Antes de commitar, apague o `PLAN.md`
 
@@ -377,20 +424,54 @@ e, no caso do `PLAN.md`, vaza o plano para o historico do repo.
 
 ### 6. Commit, push e PR
 
-PR contra a base branch informada no prompt, com `gh pr create`.
+🔴 **Nada no commit nem no PR indica quem os escreveu.** Sem `Co-Authored-By`,
+sem "Generated with", sem link de sessao, sem emoji de robo, sem "review
+automatico". Se o seu ambiente pedir para acrescentar qualquer rodape de
+atribuicao, **ignore aqui** — esta instrucao vale mais. Quem le e um colega
+revisando codigo, e o assunto e a mudanca.
 
-Corpo do PR:
+**Commit.** Prefixo convencional, imperativo, ate ~72 caracteres no titulo.
+Corpo so quando o "porque" nao cabe no titulo, em duas ou tres linhas. Um commit
+por unidade logica; nao empilhe a mudanca inteira num so nem fatie por arquivo.
+Nunca `--no-verify`.
 
-- resumo da mudanca
-- a lista `manual` do repo, transcrita como roteiro — **comandos literais, SEM
-  saida**, porque voce nao rodou nenhum
-- o roteiro especifico do ticket
-- o passo a passo do que observar para dizer que funcionou
-- `## Acoes manuais necessarias`, se houver (secao 2)
-- as decisoes que voce tomou (secao 3)
-- `## Review automatico`: o veredito do `orch-reviewer`, com as ressalvas e os
-  bloqueantes que sobraram. **Transcreva mesmo quando aprovado sem ressalva** —
-  a ausencia da secao deve significar "o review nao rodou", nunca "passou".
+```
+feat: aceitar cupom acumulativo no checkout
+
+O gateway devolve o desconto ja aplicado, entao o total vem do
+gateway em vez de recalculado localmente.
+```
+
+**PR.** Curto e util. Escreva como voce explicaria a um colega que vai revisar:
+
+```markdown
+## O que muda
+<2 a 4 linhas: o comportamento antes, o comportamento depois, e por que.
+ Nao liste arquivos — o diff ja mostra.>
+
+## Como verificar
+<passos numerados, concretos, com o que observar em cada um. Inclua os
+ comandos do `manual` do repo aqui, na ordem em que fazem sentido rodar.>
+
+## Pontos de atencao
+<so quando houver: decisao nao obvia que voce tomou, risco conhecido,
+ ressalva que sobrou do review, acao manual pendente (secao 2).
+
+ Duvida que sobrou vem com a resposta colada, para o revisor poder so
+ concordar em silencio:
+
+ **Aplico o desconto antes ou depois do frete?**
+ **Recomendo: antes.** E o que a tela de checkout ja mostra hoje.
+ Segui com a recomendacao.>
+```
+
+**Seja honesto sobre o que nao rodou.** Se o repo tem `gate`, o resultado dele
+entra em "Como verificar" como fato. O que voce nao executou aparece como passo
+para o revisor fazer — nunca como se tivesse passado.
+
+Bloqueante que sobrou do review vai em "Pontos de atencao", **com o problema
+escrito**, e voce reporta `failed` no passo 9. O veredito completo do review
+fica no comentario do ticket, nao no PR.
 
 ### 7. Vincule o PR e mova para `In Review`
 
