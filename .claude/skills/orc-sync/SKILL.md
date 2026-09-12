@@ -1,11 +1,11 @@
 ---
-name: orchestrator-sync
+name: orc-sync
 description: |
   Reconcilia as tres pontas da configuracao — registry.yaml, Linear e Orca —
   e mostra onde elas discordam: repo sem etiqueta, etiqueta orfa, repo id que
   nao existe mais, estado renomeado, stack apontando para repo removido.
   Propoe o conserto de cada divergencia e so aplica com o seu ok.
-  Use sempre que aparecer "/orchestrator-sync", "sincroniza o linear",
+  Use sempre que aparecer "/orc-sync", "sincroniza o linear",
   "as etiquetas estao certas?", depois de mexer no Linear pela interface, ou
   quando um ticket nao for roteado e voce nao souber por que.
 ---
@@ -26,7 +26,7 @@ Se reclamar, **pare e resolva**. Sessao aberta fora da raiz carrega estas skills
 mas nao acha o `bin/` — e a falha aparece no meio do trabalho, nao no comeco.
 
 
-Nao confunda com `/reconcile`. Aquele cuida de **trabalho** travado (ticket
+Nao confunda com `/orc-reconcile`. Aquele cuida de **trabalho** travado (ticket
 orfao, worker morto). Este cuida de **configuracao** divergente.
 
 A divergencia tipica nasce de uma edicao pela interface do Linear: alguem
@@ -115,7 +115,7 @@ como pendencia, e nao entra no lote.
 
 ## 4. Conserte
 
-Etiqueta e estado: as mutations estao em `/orchestrator-linear`.
+Etiqueta e estado: as mutations estao em `/orc-linear`.
 Registry: **sempre** por `./bin/registry-edit.py`, nunca editando o arquivo.
 
 ```bash

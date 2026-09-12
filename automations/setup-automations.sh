@@ -17,7 +17,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # A team key sai do registry, que e a fonte da verdade. Override por ambiente
 # continua valendo para quem tem mais de um time.
 TEAM="${LINEAR_TEAM:-$(grep -m1 'linear_team:' "$ROOT/registry.yaml" 2>/dev/null | awk '{print $2}')}"
-[ -n "${TEAM:-}" ] || { echo "sem linear_team: rode /orchestrator-setup ou defina LINEAR_TEAM" >&2; exit 1; }
+[ -n "${TEAM:-}" ] || { echo "sem linear_team: rode /orc-setup ou defina LINEAR_TEAM" >&2; exit 1; }
 
 # Workspace unico: um time so no Linear, empresas separadas por etiqueta Repo/.
 # Por isso existe UMA automation de pull, nao uma por empresa — o precheck e
@@ -30,7 +30,7 @@ orca automations create --name pull-all \
   --trigger "*/2 * * * *" \
   --workspace "path:$ROOT" --reuse-session --provider claude \
   --precheck "$ROOT/bin/has-ready.sh $TEAM" \
-  --prompt "/pull-ready"
+  --prompt "/orc-dispatch"
 
 # --- triagem: o que faz escrever ticket do celular valer a pena --------------
 # `1-59/2` = minutos IMPARES. O pull-all roda nos pares (*/2), entao os dois
@@ -42,13 +42,13 @@ orca automations create --name triage-all \
   --trigger "1-59/2 * * * *" \
   --workspace "path:$ROOT" --reuse-session --provider claude \
   --precheck "$ROOT/bin/has-triage.sh $TEAM" \
-  --prompt "/triage-tickets"
+  --prompt "/orc-triage"
 
 # --- higiene ----------------------------------------------------------------
 # sessao fresca de manha, para o coordenador nao acumular contexto o dia todo
 orca automations create --name morning-reset \
   --trigger "0 8 * * 1-5" \
   --workspace "path:$ROOT" --provider claude \
-  --prompt "/reconcile"
+  --prompt "/orc-reconcile"
 
 echo "criadas. confira com: orca automations list --json"

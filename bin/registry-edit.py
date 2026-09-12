@@ -25,6 +25,8 @@ Uso:
     registry-edit.py add-repo    --company acme --name "Acme - API" ...
     registry-edit.py rm-repo     --name "Acme - API"
     registry-edit.py add-company --key acme --linear-team ACME [--wip-max 3]
+    registry-edit.py add-stack   --name "Acme - API/Web" --repos "Acme - API" "Acme - Web"
+    registry-edit.py rename-stack --name "Acme - API/Web" --to "Acme - Web/API"
     registry-edit.py set-model   --role implementer_by_risk.medium --model opus --effort high
     registry-edit.py show        [--json]
 
@@ -61,7 +63,7 @@ def ler(caminho=None):
     if not os.path.exists(caminho):
         raise Recusa(
             f"{os.path.basename(caminho)} nao existe.\n"
-            f"Rode /orchestrator-setup, ou copie do template:\n"
+            f"Rode /orc-setup, ou copie do template:\n"
             f"    cp {os.path.basename(EXEMPLO)} {os.path.basename(caminho)}"
         )
     with open(caminho, encoding="utf-8") as fh:
@@ -226,7 +228,7 @@ def op_add_repo(a):
         raise Recusa(
             f"base '{a.base}' nao comeca com 'origin/'.\n"
             "Sem o prefixo o Orca usa a ref LOCAL sem tocar na rede, e o worker\n"
-            "implementa em cima de codigo velho. O /pull-ready recusa despachar\n"
+            "implementa em cima de codigo velho. O /orc-dispatch recusa despachar\n"
             "repo assim. Use 'origin/{}'.".format(a.base)
         )
 
@@ -306,6 +308,62 @@ def op_add_company(a):
     return gravar(texto, novo, [f"companies.{a.key}"], a.dry_run)
 
 
+def op_add_stack(a):
+    texto = ler()
+    d = carregar(texto)
+
+    if a.name in (d.get("stacks") or {}):
+        raise Recusa(f"a stack '{a.name}' ja existe")
+    if len(a.repos) < 2:
+        raise Recusa("uma stack precisa de pelo menos dois repos")
+
+    conhecidos = {n for e in (d.get("companies") or {}).values() for n in (e.get("repos") or {})}
+    faltando = [r for r in a.repos if r not in conhecidos]
+    if faltando:
+        raise Recusa(
+            "estes repos nao existem no registry:\n"
+            + "\n".join(f"    {r}" for r in faltando)
+            + "\n\nO nome tem que bater byte a byte com a chave em companies.*.repos.\n"
+            "Stack apontando para repo inexistente quebra o ticket no meio."
+        )
+
+    m = re.search(r"^stacks:[ \t]*$", texto, re.M)
+    if not m:
+        raise Recusa("bloco 'stacks:' nao encontrado")
+
+    bloco = f'\n  "{a.name}":\n' + "".join(f'    - "{r}"\n' for r in a.repos)
+    novo = texto[: m.end()] + bloco + texto[m.end() :]
+    return gravar(texto, novo, [f"stacks.{a.name}"], a.dry_run)
+
+
+def op_rename_stack(a):
+    """Troca so a chave, preservando os membros e a posicao no arquivo.
+
+    Renomear e diferente de remover e recriar: no Linear a etiqueta guarda o
+    vinculo com os tickets que a usam, e apagar leva os vinculos junto, sem
+    volta. Aqui vale o mesmo principio — o registry e a etiqueta tem que mudar
+    de nome em conjunto, nunca uma sumir e outra nascer.
+    """
+    texto = ler()
+    d = carregar(texto)
+    stacks = d.get("stacks") or {}
+
+    if a.name not in stacks:
+        raise Recusa(
+            f"a stack '{a.name}' nao existe. As que existem:\n"
+            + "\n".join(f"    {k}" for k in stacks)
+        )
+    if a.to in stacks:
+        raise Recusa(f"ja existe uma stack chamada '{a.to}'")
+
+    m = list(re.finditer(rf'^(\s+)"{re.escape(a.name)}":[ \t]*$', texto, re.M))
+    if len(m) != 1:
+        raise Recusa(f"a chave da stack casou {len(m)} vezes — nao vou adivinhar")
+
+    novo = texto[: m[0].start()] + f'{m[0].group(1)}"{a.to}":' + texto[m[0].end() :]
+    return gravar(texto, novo, [f"stacks.{a.name}", f"stacks.{a.to}"], a.dry_run)
+
+
 def op_set_model(a):
     texto = ler()
     partes = a.role.split(".")
@@ -333,6 +391,28 @@ def op_set_model(a):
         prefixo = f"defaults.models.{chave}"
 
     return gravar(texto, novo, [prefixo], a.dry_run)
+
+
+def op_set_backend(a):
+    """Troca onde o trabalho e registrado. Nao migra nada: o que ja existe fica
+    onde nasceu, e e por isso que a skill avisa antes de chamar aqui."""
+    if a.para not in ("linear", "orca"):
+        raise Recusa("backend deve ser 'linear' ou 'orca'")
+    texto = ler()
+    atual = ((carregar(texto).get("defaults") or {}).get("backend") or "").strip().lower()
+    if atual == a.para:
+        print(f"backend ja e '{a.para}'; nada a fazer")
+        return False
+
+    m = list(re.finditer(r"^(\s*)backend:[ \t]+(\S+)[ \t]*$", texto, re.M))
+    if len(m) != 1:
+        raise Recusa(
+            f"'backend:' casou {len(m)} vezes — esperava exatamente 1.\n"
+            "  se a chave nao existe, acrescente `backend: linear` em `defaults:` a mao"
+        )
+    linha = f"{m[0].group(1)}backend: {a.para}"
+    novo = texto[: m[0].start()] + linha + texto[m[0].end():]
+    return gravar(texto, novo, ["defaults.backend"], a.dry_run)
 
 
 def op_show(a):
@@ -397,12 +477,28 @@ def main():
     s.add_argument("--wip-max", dest="wip_max", type=int, default=3)
     s.set_defaults(fn=op_add_company)
 
+    s = sub.add_parser("add-stack")
+    s.add_argument("--name", required=True,
+                   help="identico ao nome da etiqueta Stack/ no Linear")
+    s.add_argument("--repos", nargs="+", required=True,
+                   help="nomes exatos, como estao em companies.*.repos")
+    s.set_defaults(fn=op_add_stack)
+
+    s = sub.add_parser("rename-stack")
+    s.add_argument("--name", required=True, help="nome atual")
+    s.add_argument("--to", required=True, help="nome novo")
+    s.set_defaults(fn=op_rename_stack)
+
     s = sub.add_parser("set-model")
     s.add_argument("--role", required=True,
                    help="orchestrator | planner | reviewer | implementer_by_risk.<nivel>")
     s.add_argument("--model")
     s.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"])
     s.set_defaults(fn=op_set_model)
+
+    s = sub.add_parser("set-backend")
+    s.add_argument("para", choices=["linear", "orca"])
+    s.set_defaults(fn=op_set_backend)
 
     s = sub.add_parser("show")
     s.add_argument("--json", action="store_true")

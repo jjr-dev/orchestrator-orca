@@ -12,7 +12,7 @@
 # current` nem variavel de ambiente com o handle. A sessao que esta rodando este
 # comando e, por definicao, a que produziu output agora — entao ela e o
 # `max_by(lastOutputAt)` do worktree do painel. E a mesma deducao que o
-# /reconcile usa para nao se matar ao fechar terminais velhos.
+# /orc-reconcile usa para nao se matar ao fechar terminais velhos.
 #
 # LIMITE: se duas sessoes do painel arrancarem no mesmo segundo, uma pode
 # renomear a aba da outra. O estrago e um titulo errado — cosmetico. Nao use

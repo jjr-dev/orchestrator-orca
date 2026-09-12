@@ -1,12 +1,12 @@
 ---
-name: triage-tickets
+name: orc-triage
 description: |
   Pega tickets crus do Linear em "Draft", le o repositorio de verdade e
   reescreve a descricao no formato executavel por agente: escopo, fora de escopo,
   arquivos afetados, criterios de aceite e roteiro de verificacao manual. Quando o
   escopo atravessa frontend e backend, propoe a quebra em issue pai com contrato de
   API mais uma sub-issue por repositorio.
-  Use sempre que aparecer "/triage-tickets", "redige os tickets", "tria os tickets",
+  Use sempre que aparecer "/orc-triage", "redige os tickets", "tria os tickets",
   "transforma essa ideia em ticket", "esse ticket ta magro", ou quando uma automation
   do Orca disparar triagem para uma empresa.
 ---
@@ -27,10 +27,22 @@ Se reclamar, **pare e resolva**. Sessao aberta fora da raiz carrega estas skills
 mas nao acha o `bin/` — e a falha aparece no meio do trabalho, nao no comeco.
 
 
-Argumento: `$ARGUMENTS` = chave da empresa no `registry.yaml`, para restringir a
-uma so empresa. **Sem argumento, roda para todas** — e assim que a automation
-chama. Nunca pergunte qual empresa: em execucao por cron nao ha ninguem para
-responder.
+Argumento: `$ARGUMENTS` aceita duas formas.
+
+| Forma | O que faz |
+|---|---|
+| chave da empresa (`acme`) | restringe a uma empresa |
+| um ou mais `<IDENT>` (`ACME-202 ACME-203`) | tria **exatamente** esses, em qualquer estado |
+| vazio | roda para todas as empresas |
+
+**Sem argumento, roda para todas** — e assim que a automation chama. Nunca
+pergunte qual empresa: em execucao por cron nao ha ninguem para responder.
+
+**A forma com `<IDENT>` existe para o `/orc-task`**, que cria os tickets e
+precisa da redacao so neles. Nela, duas diferencas: voce ignora a varredura de
+`Draft` e o `wip_max`, e **nao move o estado no fim** — quem criou o ticket
+cuida do ciclo dele. Faca so o claim para `Drafting` e a devolucao para
+`Drafted`, para que uma triagem concorrente nao pegue o mesmo ticket.
 
 Workspace unico: um so time no Linear. A empresa vem da etiqueta `Repo/` via
 registry, nunca do time.
@@ -64,6 +76,24 @@ Voce precisa de: `orca status --json`, o `registry.yaml`, e os comandos
 `orca linear ...` que estao escritos aqui. **Nao rode `--help` para descobrir
 sintaxe** — os comandos deste arquivo estao conferidos. Se algum falhar por flag
 invalida, ai sim consulte o `--help` daquele comando especifico.
+
+## Modo sem ticket: quando a `/orc-task` te chama
+
+A `/orc-task` te invoca passando **um pedido e um repositorio**, nao um
+`<IDENT>`. Nesse modo:
+
+- **nao selecione nada** (pule o Passo 1) e **nao faca claim** (pule o 1b): nao
+  ha ticket ainda, e quem controla o estado e quem te chamou;
+- aplique os Passos 3 e 4 normalmente — ler o codigo e escrever a spec sao as
+  regras que importam aqui, e elas nao dependem de haver ticket;
+- **escreva a spec num arquivo** e devolva o caminho, em vez de gravar no
+  backend.
+
+Existe por causa do backend `orca`, onde a spec de uma task e **imutavel depois
+da criacao**: se o ticket nascesse antes da redacao, nao haveria como ajustar
+antes de aprovar, e ajustar antes de aprovar e o proposito do portao. Escrever
+primeiro e gravar depois funciona igual nos dois backends, entao e o caminho
+unico — nao o caso especial de um deles.
 
 ## Passo 1 - Selecionar
 
@@ -103,7 +133,7 @@ No relatorio final, diga quantos ficaram na fila.
 Assim que escolher o ticket, e **antes de ler qualquer codigo**:
 
 ```bash
-orca linear status set --id <IDENT> --to "Drafting" --json
+./bin/board.sh move --to "Drafting" <IDENT>
 ```
 
 Isso e claim, nao conclusao. Sem ele o ticket continua em `Draft` enquanto voce
@@ -122,7 +152,7 @@ escrever nela:
 ```
 
 Se a sua sessao morrer entre o claim e o fechamento, o ticket fica em `Drafting`
-parado. O `/reconcile` detecta pelo tempo sem atualizacao e devolve para `Draft`
+parado. O `/orc-reconcile` detecta pelo tempo sem atualizacao e devolve para `Draft`
 sozinho — voce nao precisa se preocupar com isso, so nao pule o claim.
 
 ### SEMPRE leia os comentarios antes de escrever
@@ -309,7 +339,13 @@ diferente. Ticket que contraria o padrao local vira discussao no review.
 
 ## Passo 4 - Reescrever a descricao
 
-Substitua a descricao do ticket por esta estrutura, em portugues.
+Substitua a descricao do ticket por esta estrutura, em portugues:
+
+```bash
+./bin/board.sh update --body-file <arquivo com a spec> <IDENT>
+```
+
+
 
 **Tamanho proporcional ao ticket.** Mudanca de uma linha nao precisa de tres
 paragrafos de contexto. Escreva o que o worker precisa para executar sem voltar a
@@ -402,7 +438,7 @@ Sendo de filho, para CADA filho afetado:
 1. escreva a secao `## Leva N` na descricao **dele**, com o delta que cabe ao
    repo dele
 2. mova **ele** para `Draft`:
-   `orca linear status set --id <FILHO> --to "Draft" --json`
+   `./bin/board.sh move --to "Draft" <FILHO>`
 3. no fim, devolva o **pai** para `Drafted` e comente ali quais filhos voce
    reabriu e por que — uma linha por filho
 
@@ -492,10 +528,17 @@ o ignora automaticamente — issue pai nao e despachavel.
 Depois crie um filho por repositorio:
 
 ```bash
-orca linear save-issue --team <TEAM_KEY> --parent-id <IDENT-do-pai> \
+# um filho
+./bin/board.sh create --team <TEAM_KEY> --parent <IDENT-do-pai> \
   --title "<titulo do filho>" --body-file <arquivo> \
-  --label "<Nome do Repo>" --label "<nivel de risco>" \
-  --state "Drafted" --json
+  --label "<Nome do Repo>" --label "<nivel de risco>" --state "Drafted"
+
+# varios de uma vez: um arquivo JSON, uma requisicao so
+cat > /tmp/filhos.json <<'JSON'
+[ {"title": "<titulo A>", "body_file": "<arquivo A>", "labels": ["<Repo A>", "<risco>"], "state": "Drafted"},
+  {"title": "<titulo B>", "body_file": "<arquivo B>", "labels": ["<Repo B>", "<risco>"], "state": "Drafted"} ]
+JSON
+./bin/board.sh create --team <TEAM_KEY> --parent <IDENT-do-pai> --batch /tmp/filhos.json
 ```
 
 Regras da quebra:
@@ -529,7 +572,7 @@ identificadores dos filhos criados.
 2. Se o ticket tinha `Fast Track`, **remova a etiqueta**:
 
    ```bash
-   orca linear label remove <IDENT> --label "Fast Track" --json
+   ./bin/board.sh label --remove "Fast Track" <IDENT>
    ```
 
    `Fast Track` significa "nao passou por triagem". Depois que voce redigiu, isso
@@ -554,7 +597,7 @@ identificadores dos filhos criados.
 4. **Mova para `Drafted`.** E o ultimo passo, depois do comentario:
 
    ```bash
-   orca linear status set --id <IDENT> --to "Drafted" --json
+   ./bin/board.sh move --to "Drafted" <IDENT>
    ```
 
    A ordem importa. `Drafted` e o sinal de "terminei, pode ler" — se voce mover

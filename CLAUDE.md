@@ -35,8 +35,8 @@ registry, despachar workers em worktrees de outros repositorios e cuidar dos gat
    worker**, rode `orca skills get orchestration --full` e siga o que ele
    imprimir, nao o que estiver escrito de memoria em qualquer lugar.
 
-   Vale para `/pull-ready` e `/orchestrate-project`. **NAO vale para
-   `/triage-tickets` nem `/reconcile`**: eles nao usam nenhum comando
+   Vale para `/orc-dispatch` e `/orc-project`. **NAO vale para
+   `/orc-triage` nem `/orc-reconcile`**: eles nao usam nenhum comando
    `orca orchestration`, e o guia tem 388 linhas que passariam a ser relidas a
    cada turno da sessao. Carregar contexto que nao se usa e o que mais encarece
    uma passagem.
@@ -79,7 +79,7 @@ paralelo, justamente para que os dois nao possam discordar.
 
 Voltar para tras e sempre o conserto: `Drafting -> Draft` devolve para a
 triagem, `Scheduled -> Ready for Agent` devolve para o despacho. Quem faz isso e
-o `/reconcile`.
+o `/orc-reconcile`.
 
 ## Nova leva: ticket que volta para `Draft` depois de ter PR
 
@@ -102,20 +102,66 @@ worktree = um PR, do comeco ao fim.
 
 ## Pedir ajuste pelo chat do painel
 
-`/ajustar <IDENT> <pedido>` e o caminho quando voce quer falar em vez de
+`/orc-adjust <IDENT> <pedido>` e o caminho quando voce quer falar em vez de
 comentar no Linear e mover estado. Ele le a arvore, descobre por leitura de
 codigo quais repos o pedido toca, escreve a `## Leva N` nos filhos certos e
 despacha — sem passar por `Ready for Agent`.
 
-14. O pedido no chat E a aprovacao humana. Por isso `/ajustar` pode despachar
-    direto, e so ele: automation nenhuma ganha esse direito.
-15. `/ajustar` roteia por **repositorio**, nunca por "e correcao ou e escopo
+14. O pedido no chat dispensa `Ready for Agent`, **nao dispensa a leitura**.
+    `/orc-adjust` despacha direto: o humano ja leu o PR, e o ajuste e a resposta
+    ao que ele leu. `/orc-task` **para em `Drafted` e mostra a spec no chat**,
+    porque ali nao houve leitura nenhuma ainda — o pedido foi uma frase, e o que
+    vai para o worker sao trinta linhas que a triagem escreveu. Aprovar o que
+    nao se leu nao e aprovar. A excecao e `--fast`, onde nao ha spec para ler.
+    **O que autoriza e o humano ter digitado**, nao o comando existir: automation
+    nenhuma ganha esse direito, e nenhuma outra skill deve ganhar sem a mesma
+    justificativa.
+
+14b. **`Drafted` e a sala de espera do chat.** Nenhum precheck olha esse estado
+    (`has-triage.sh` vigia `Draft`, `has-ready.sh` vigia `Ready for Agent`) e o
+    `/orc-reconcile` so destrava `Drafting`. Ticket parado ali espera
+    indefinidamente sem nenhum cron pegar pelas costas — e por isso que o portao
+    do `/orc-task` pode durar o tempo que o humano quiser.
+15. `/orc-adjust` roteia por **repositorio**, nunca por "e correcao ou e escopo
     novo". Repo com filho de PR aberto ganha leva nova; repo sem filho ganha
     filho novo.
+15b. **A etiqueta `Queue Jump` isenta do `wip_max` da empresa, e so dele.** Ela
+    e aplicada pela `/orc-task` em tudo que nasce do chat, e existe para que o
+    furo de fila apareca no board em vez de ser regra invisivel.
+
+    `wip_max_global` **nao** tem excecao: ele protege a maquina, e cada worker e
+    uma sessao completa. Derrubar a maquina no meio de cinco workers perde o
+    ticket que furou junto com os outros quatro.
+15c. **Escrita no Linear passa pelo `bin/linear.sh`; leitura continua no
+    `orca linear`.** O `orca` resolve nome para UUID a cada escrita, num processo
+    novo que nao aproveita nada do anterior: medido em 11/09, mover dois tickets
+    custa 4199 ms por ali e 401 ms pelo script; criar um ticket com estado e tres
+    etiquetas custa 5630 ms contra 387 ms. As leituras (`issue`, `list-issues`)
+    ficam onde estao — ja custam ~410 ms, perto do piso de rede, e as skills
+    dependem do formato de saida delas.
+
 16. Claim antes de criar: `Scheduled` primeiro, Orca depois. Igual ao
-    `pull-ready`, e pelo mesmo motivo.
+    `/orc-dispatch`, e pelo mesmo motivo.
 17. Descobrir qual repo um pedido toca e o unico julgamento que sobrou neste
     fluxo, e ele exige **ler o codigo**. Nome de ticket e nome de repo enganam.
+17b. **So dois estados sao visiveis para o cron**, e e por eles que o trabalho
+    entra na fila sozinho:
+
+    | Estado | Quem vigia |
+    |---|---|
+    | `Draft` | `has-triage.sh` — a cada 2 min |
+    | `Ready for Agent` | `has-ready.sh` — a cada 2 min |
+
+    Os outros nenhum precheck olha. Consequencia para quem cria ticket fora do
+    caminho do Linear: **nasca ja reivindicado.** A `/orc-task` cria em
+    `Drafting`, nao em `Draft`, porque ticket em `Draft` e visivel para o cron
+    antes de voce reivindicar — e ele despacharia uma segunda triagem no mesmo
+    ticket. O claim decidiria o empate, mas um dispatch teria sido jogado fora.
+
+    O inverso tambem vale, e e util: **largar de proposito em
+    `Ready for Agent`** e como se devolve trabalho para a fila sem orfanar nada
+    — e o que a `/orc-task` faz com o que nao coube no `wip_max`, e o que o
+    `/orc-reconcile` faz com ticket travado.
 
 ## Metadata do worktree espelha o Linear
 
@@ -209,10 +255,20 @@ despacha — sem passar por `Ready for Agent`.
 29. `registry.yaml` esta no `.gitignore` e **nao pode sair de la**. O template
     versionado e o `registry.example.yaml`. Este repo e publico: o registry tem
     nome de cliente, id de repo e a topologia inteira da operacao.
-30. Seis skills configuram o sistema: `/orchestrator-setup` (instalar),
-    `/orchestrator-linear` (token, estados, etiquetas), `/orchestrator-repo-add`
-    (repo novo), `/orchestrator-sync` (reconciliar as tres pontas),
-    `/orchestrator-models` (modelo e effort por etapa) e `/orchestrator-doctor`
+30. Toda skill do orquestrador comeca com `orc-`, e `/orc-help` lista todas —
+    ele deriva a lista do disco, entao skill nova aparece sozinha. Se voce criar
+    uma, acrescente a linha dela em `descreve()` no `bin/help.sh`; o script
+    avisa quando falta, mas o aviso so serve se alguem agir.
+
+    As operacionais:
+    `/orc-task` (demanda nova pelo chat), `/orc-triage` (redigir),
+    `/orc-dispatch` (puxar e despachar), `/orc-adjust` (ajustar o que ja tem
+    PR), `/orc-project` (grafo de ondas) e `/orc-reconcile` (destravar).
+
+    Seis skills configuram o sistema: `/orc-setup` (instalar),
+    `/orc-linear` (token, estados, etiquetas), `/orc-repo-add`
+    (repo novo), `/orc-sync` (reconciliar as tres pontas),
+    `/orc-models` (modelo e effort por etapa) e `/orc-doctor`
     (esta ligado?). **O setup delega as outras, nao duplica a logica delas.**
 31. Skill que toca Linear ou Orca mostra **um** plano, pede **uma** confirmacao,
     executa e verifica. Nao pergunte item por item: sao ~15 confirmacoes num

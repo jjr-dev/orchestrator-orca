@@ -1,10 +1,10 @@
 ---
-name: orchestrator-repo-add
+name: orc-repo-add
 description: |
   Acrescenta um repositorio ao orquestrador de ponta a ponta: registra no Orca,
   cria a etiqueta Repo/ no Linear e escreve a entrada no registry.yaml com os
   invariantes ja corretos. Tambem cria a empresa, quando ela ainda nao existe.
-  Use sempre que aparecer "/orchestrator-repo-add", "adiciona esse repo",
+  Use sempre que aparecer "/orc-repo-add", "adiciona esse repo",
   "novo projeto no orquestrador", "adicionar item no registry", ou quando um
   ticket apontar para um repo que o registry ainda nao conhece.
 ---

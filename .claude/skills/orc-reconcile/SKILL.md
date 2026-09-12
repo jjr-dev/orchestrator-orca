@@ -1,12 +1,12 @@
 ---
-name: reconcile
+name: orc-reconcile
 description: |
   Varre todas as empresas procurando trabalho travado: tickets orfaos em
   "Scheduled" ou "In Progress" sem dispatch vivo (devolve para "Ready for Agent"),
   triagens travadas em "Drafting" (devolve para "Draft"), portoes esperando
   resposta humana e worktrees que ja podem ser removidos. Roda no boot do Orca e
   sob demanda.
-  Use sempre que aparecer "/reconcile", "reconcilia", "tem ticket travado?",
+  Use sempre que aparecer "/orc-reconcile", "reconcilia", "tem ticket travado?",
   "limpa os orfaos", depois de reiniciar a maquina ou o app, ou quando um ticket
   parecer parado sem worker.
 ---
@@ -134,7 +134,7 @@ Diferente do claim orfao antigo — que era heuristica sobre o formato da
 descricao — **aqui voce age**:
 
 ```bash
-orca linear status set --id <IDENT> --to "Draft" --json
+./bin/board.sh move --to "Draft" <IDENT>
 ```
 
 Pode agir porque devolver para `Draft` nao destroi nada. O ticket volta para a

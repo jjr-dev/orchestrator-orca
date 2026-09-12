@@ -4,7 +4,7 @@
 # Uso: has-ready.sh <linear_team_key>
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEAM="${1:?informe a team key do Linear, ex: ACME}"
+TEAM="${1:-}"   # obrigatorio so no backend linear; ver abaixo
 
 [ -f "$DIR/../PAUSE" ] && exit 1
 
@@ -21,6 +21,28 @@ if [ -f "$LOCK" ]; then
   mtime=$(stat -f %m "$LOCK" 2>/dev/null || stat -c %Y "$LOCK" 2>/dev/null || echo 0)
   [ $(( now - mtime )) -lt "$LOCK_TTL" ] && exit 1
 fi
+
+# Qual backend registra o trabalho decide onde esta a fila. O precheck roda
+# ANTES de acordar o agente, entao ele precisa saber disso sozinho — nao da
+# para delegar para uma skill que ainda nao subiu.
+#
+# Sai 6 quando o backend e indeterminado, em vez de 1. Os dois impedem o
+# dispatch, mas 1 significa "fila vazia" e 6 significa "nao sei ler a
+# configuracao" — colapsar os dois esconderia um registry quebrado como se
+# fosse um dia sem trabalho.
+BACK=$("$DIR/backend.sh") || exit 6
+
+if [ "$BACK" = orca ]; then
+  set +e
+  orca orchestration task-list --ready --json \
+    | jq -e '.result.count > 0' > /dev/null
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] && touch "$LOCK"
+  exit "$rc"
+fi
+
+: "${TEAM:?no backend linear, informe a team key, ex: ACME}"
 
 read -r -d '' Q <<QUERY || true
 {

@@ -1,11 +1,11 @@
 ---
-name: orchestrator-doctor
+name: orc-doctor
 description: |
   Verifica se a instalacao do orquestrador esta realmente ligada: binarios,
   registry, estados e etiquetas no Linear, subagentes instalados, resolver de
   modelo, hook de comandos e as automations. Somente leitura; propoe os
   consertos mas so aplica com o seu ok.
-  Use sempre que aparecer "/orchestrator-doctor", "esta tudo ligado?", "o
+  Use sempre que aparecer "/orc-doctor", "esta tudo ligado?", "o
   orquestrador esta funcionando?", depois de mexer em configuracao, depois de
   atualizar o Orca, ou quando algo parou de disparar sem erro aparente.
 ---
@@ -70,12 +70,12 @@ Antes de aplicar qualquer um, diga o que vai fazer e espere o ok.
 | Falha | Conserto |
 |---|---|
 | subagente nao instalado, ou difere da fonte | `./bin/install-agents.sh` |
-| `registry.yaml` nao existe | `cp registry.example.yaml registry.yaml`, depois `/orchestrator-setup` |
+| `registry.yaml` nao existe | `cp registry.example.yaml registry.yaml`, depois `/orc-setup` |
 | `registry.yaml` nao esta no `.gitignore` | acrescente a linha — publicar o repo publicaria a config |
-| estado faltando no Linear | `/orchestrator-linear` |
-| repo sem etiqueta `Repo/` | `/orchestrator-sync` |
-| automation ausente ou desabilitada | `/orchestrator-setup` (secao de cronjobs) |
-| `base` sem `origin/` | edite o `registry.yaml`; o `/pull-ready` ja recusa despachar assim |
+| estado faltando no Linear | `/orc-linear` |
+| repo sem etiqueta `Repo/` | `/orc-sync` |
+| automation ausente ou desabilitada | `/orc-setup` (secao de cronjobs) |
+| `base` sem `origin/` | edite o `registry.yaml`; o `/orc-dispatch` ja recusa despachar assim |
 | precheck sem permissao de execucao | `chmod +x bin/has-*.sh` |
 
 **Nao conserte `base` sem perguntar qual e a branch certa.** Trocar

@@ -115,7 +115,7 @@ de `--resume` queimando contexto ate a sessao estourar.
 Quando um dos quatro casos acima acontecer, faca assim — sem bloquear:
 
 1. comente a duvida no ticket, com a sua recomendacao ja formulada:
-   `orca linear comment add <IDENT> --body "..." --json`
+   `<ORCH_ROOT>/bin/board.sh comment --body "..." <IDENT>`
 2. **siga trabalhando** no que nao depende da resposta
 3. se a duvida impedir concluir, entregue o que da e reporte `worker_done` com
    `--outcome failed`, explicando em uma frase
@@ -160,7 +160,7 @@ resolucao em codigo que voce nao escreveu.
 ### 1. Mova o ticket para `In Progress`
 
 ```bash
-orca linear status set --id <IDENT> --to "In Progress" --json
+<ORCH_ROOT>/bin/board.sh move --to "In Progress" <IDENT>
 ```
 
 ### 1b. Se o ticket tem imagem, abra antes de planejar
@@ -236,7 +236,7 @@ Publique o plano como comentario no ticket — e o que permite apagar o arquivo
 depois, e deixa o plano revisavel do celular:
 
 ```bash
-orca linear comment add <IDENT> --body-file PLAN.md --json
+<ORCH_ROOT>/bin/board.sh comment --body-file PLAN.md <IDENT>
 ```
 
 **Tamanho proporcional a mudanca.** Ticket de uma linha nao merece plano de
@@ -258,8 +258,8 @@ contrato publico, ou o enunciado admite duas leituras:
   de plano
 - devolva para a triagem:
   ```bash
-  orca linear label remove <IDENT> --label "Fast Track" --json
-  orca linear status set --id <IDENT> --to "Draft" --json
+  <ORCH_ROOT>/bin/board.sh label --remove "Fast Track" <IDENT>
+  <ORCH_ROOT>/bin/board.sh move --to "Draft" <IDENT>
   ```
 
   `Draft` e a fila da triagem, nao `Drafting` — esse ultimo significa "uma
@@ -402,8 +402,8 @@ registro de que o review rodou tem que existir; o PR e para quem revisa a
 mudanca, e o processo interno nao interessa a ele.
 
 ```bash
-orca linear comment add <IDENT> --body "Review: <veredito>
-<ressalvas e bloqueantes, um por linha>" --json
+<ORCH_ROOT>/bin/board.sh comment --body "Review: <veredito>
+<ressalvas e bloqueantes, um por linha>" <IDENT>
 ```
 
 Comente **sempre**, inclusive quando aprovado sem ressalva. A ausencia do
@@ -489,7 +489,7 @@ git push
 gh pr comment <url> --body "## Leva N
 <o que mudou agora, em ate 10 linhas, e por que>
 <se voce trouxe origin/<base> para dentro, diga>"
-orca linear status set --id <IDENT> --to "In Review" --json
+<ORCH_ROOT>/bin/board.sh move --to "In Review" <IDENT>
 ```
 
 **Nao reanexe o PR no Linear.** O link ja esta la desde a primeira leva; anexar
@@ -499,7 +499,7 @@ Se nao existir PR aberto, e a primeira leva — abra normalmente:
 
 ```bash
 orca linear attach --current --url <pr-url> --title "PR link" --json
-orca linear status set --id <IDENT> --to "In Review" --json
+<ORCH_ROOT>/bin/board.sh move --to "In Review" <IDENT>
 ```
 
 Se o seu ticket tem pai, atualize o pai depois de mover:

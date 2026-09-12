@@ -1,11 +1,11 @@
 ---
-name: adjust
+name: orc-adjust
 description: |
   Recebe um pedido em texto livre sobre um ticket que ja virou codigo, descobre
   quais repositorios ele toca, escreve a nova leva na descricao dos filhos
   certos e despacha os workers — retomando o worktree e o PR que ja existem.
   Cria filho novo quando o pedido toca um repo que ainda nao tem um.
-  Use sempre que aparecer "/ajustar", "/adjust", "pede pro <ticket> tambem
+  Use sempre que aparecer "/orc-adjust", "/orc-adjust", "pede pro <ticket> tambem
   fazer X", "manda ajustar o <ticket>", ou quando o humano descrever no chat uma
   mudanca sobre trabalho que ja esta em PR.
 ---
@@ -26,7 +26,7 @@ Se reclamar, **pare e resolva**. Sessao aberta fora da raiz carrega estas skills
 mas nao acha o `bin/` — e a falha aparece no meio do trabalho, nao no comeco.
 
 
-Argumento: `/ajustar <IDENT> <pedido em texto livre>`
+Argumento: `/orc-adjust <IDENT> <pedido em texto livre>`
 
 `<IDENT>` e o **pai** de uma arvore, ou o proprio ticket quando ele nao tem
 filhos. O pedido e o que voce escreveria num comentario do Linear — so que aqui
@@ -120,7 +120,7 @@ essa distincao nao muda nada de concreto e so gera discussao.
 | ja tem filho, `resume-target` diz `FRESH pr-fechado` | `## Leva N` nesse filho |
 | nao tem filho nenhum | **cria** filho novo |
 
-Filho novo nasce como no Passo 5 do `/triage-tickets`: etiqueta `Repo/`, o
+Filho novo nasce como no Passo 5 do `/orc-triage`: etiqueta `Repo/`, o
 contrato do pai inlinado, e sem `blockedBy` para os irmaos.
 
 ## Passo 4 - Escrever a leva
@@ -157,7 +157,7 @@ pega nas proximas rodadas.
 
 Para cada filho que cabe, **nesta ordem**:
 
-1. `orca linear status set --id <FILHO> --to "Scheduled" --json`
+1. `./bin/board.sh move --to "Scheduled" <FILHO>`
 2. so entao crie qualquer coisa no Orca
 
 Inverter gera worker duplicado se algo falhar no meio — mesma regra do

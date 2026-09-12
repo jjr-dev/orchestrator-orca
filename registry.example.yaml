@@ -52,8 +52,34 @@
 # da soma de proposito: os limites por empresa impedem que uma monopolize, e o
 # global protege a maquina (cada worker e uma sessao completa do Claude Code:
 # dimensione pela sua RAM, nao pelo numero de repos).
+#
+# Os dois nao tem o mesmo peso: o da empresa e JUSTICA, e ticket com a etiqueta
+# `Queue Jump` fura ele de proposito — veio do chat, o humano pediu na hora. O
+# global e HARDWARE, e nao admite excecao.
 
 defaults:
+  # Onde o trabalho e registrado. Duas opcoes, e a escolha vale para o sistema
+  # inteiro — skills, prechecks e doctor todos leem esta chave.
+  #
+  #   linear  o Linear guarda o ticket, o estado e as etiquetas. Tem board,
+  #           anexo de imagem, historico em servidor, e os cronjobs vigiam as
+  #           colunas. Exige token e a configuracao do /orc-linear.
+  #
+  #   orca    o proprio Orca guarda a spec, o pai/filho e o status. Nao precisa
+  #           de token nem de servico externo. O fluxo e todo pelo chat, via
+  #           /orc-task: sem board para arrastar cartao, e por isso sem a fila
+  #           de triagem de 2 em 2 minutos.
+  #
+  # O que muda de concreto no modo `orca`:
+  #   - `Repo/`, `Risk/` e `Stack/` viram um bloco no topo da propria spec,
+  #     porque task do Orca nao tem etiqueta;
+  #   - os 9 estados do Linear colapsam em 5 (ver bin/board.sh);
+  #   - a aprovacao usa o gate nativo: `gate-create` poe a task em `blocked` e
+  #     a tira da fila `ready`; `gate-resolve` devolve.
+  #
+  # Trocar depois de ter trabalho em andamento NAO migra nada. O que ja existe
+  # fica onde nasceu.
+  backend: linear
   # Onde os anexos baixados do Linear ficam. Precisa estar FORA de qualquer
   # repositorio git: anexo nao pode ser commitado por acidente. Aceita ~ e
   # pode apontar para volume externo — os scripts checam se esta montado

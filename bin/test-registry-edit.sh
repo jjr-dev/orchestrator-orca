@@ -93,6 +93,57 @@ else
   falha "add-company: comando saiu com erro"
 fi
 
+# --- 5b. add-stack ----------------------------------------------------------
+if "$EDIT" add-stack --name "Beta - API/App" --repos "Acme - API" "Acme - Web" >/dev/null 2>&1; then
+  valido && tem "d['stacks']['Beta - API/App'] == ['Acme - API','Acme - Web']" \
+    && passa "add-stack cria a stack com os membros certos" || falha "add-stack: membros errados"
+  tem "'Acme - API/Web' in d['stacks']" \
+    && passa "add-stack nao mexeu na stack existente" || falha "add-stack: stack vizinha sumiu"
+  tem "len(d['companies']['acme']['repos']) >= 2" \
+    && passa "add-stack nao tocou em companies" || falha "add-stack: vazou para companies"
+else
+  falha "add-stack: comando saiu com erro"
+fi
+
+# stack apontando para repo inexistente e o erro que quebra o ticket no meio
+if "$EDIT" add-stack --name "X - A/B" --repos "Acme - API" "Nao Existe" >/dev/null 2>&1; then
+  falha "add-stack aceitou repo que nao existe no registry"
+else
+  passa "recusa stack com repo inexistente"
+fi
+
+if "$EDIT" add-stack --name "So Um" --repos "Acme - API" >/dev/null 2>&1; then
+  falha "add-stack aceitou stack de um repo so"
+else
+  passa "recusa stack com menos de dois repos"
+fi
+
+# --- 5c. rename-stack -------------------------------------------------------
+# Renomear existe porque no Linear a etiqueta guarda o vinculo com os tickets:
+# apagar e recriar perderia todos. O registry acompanha o mesmo movimento.
+if "$EDIT" rename-stack --name "Beta - API/App" --to "Beta - App/API" >/dev/null 2>&1; then
+  valido && tem "d['stacks']['Beta - App/API'] == ['Acme - API','Acme - Web']" \
+    && passa "rename-stack troca a chave e preserva os membros" || falha "rename-stack: membros perdidos"
+  tem "'Beta - API/App' not in d['stacks']" \
+    && passa "rename-stack remove o nome antigo" || falha "rename-stack: nome antigo ficou"
+  tem "'Acme - API/Web' in d['stacks']" \
+    && passa "rename-stack nao mexeu nas outras stacks" || falha "rename-stack: vizinha afetada"
+else
+  falha "rename-stack: comando saiu com erro"
+fi
+
+if "$EDIT" rename-stack --name "Nao Existe" --to "X" >/dev/null 2>&1; then
+  falha "rename-stack aceitou stack inexistente"
+else
+  passa "recusa renomear stack que nao existe"
+fi
+
+if "$EDIT" rename-stack --name "Beta - App/API" --to "Acme - API/Web" >/dev/null 2>&1; then
+  falha "rename-stack aceitou nome que ja existe"
+else
+  passa "recusa renomear para nome ja usado"
+fi
+
 # --- 6. set-model no bloco de risco ----------------------------------------
 if "$EDIT" set-model --role implementer_by_risk.medium --model sonnet --effort high >/dev/null 2>&1; then
   tem "d['defaults']['models']['implementer_by_risk']['medium'] == {'model':'sonnet','effort':'high'}" \

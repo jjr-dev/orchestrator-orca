@@ -1,13 +1,13 @@
 ---
-name: orchestrator-linear
+name: orc-linear
 description: |
   Configura o lado Linear do orquestrador: valida o token da API, descobre os
   times, e cria os 9 estados do workflow e os grupos de etiqueta (Repo, Risk,
   Stack, Fast Track) que o roteamento inteiro depende. Idempotente: rodar de
   novo so cria o que falta.
-  Use sempre que aparecer "/orchestrator-linear", "configurar o linear",
+  Use sempre que aparecer "/orc-linear", "configurar o linear",
   "definir o token do linear", "criar os estados", "faltam as etiquetas", ou
-  quando o /orchestrator-doctor acusar estado ou grupo faltando.
+  quando o /orc-doctor acusar estado ou grupo faltando.
 ---
 
 # Linear: token, estados e etiquetas

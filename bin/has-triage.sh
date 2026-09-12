@@ -4,7 +4,7 @@
 # Uso: has-triage.sh <linear_team_key>
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEAM="${1:?informe a team key do Linear, ex: ACME}"
+TEAM="${1:-}"   # obrigatorio so no backend linear
 
 [ -f "$DIR/../PAUSE" ] && exit 1
 
@@ -19,6 +19,15 @@ TEAM="${1:?informe a team key do Linear, ex: ACME}"
 # O lock cobre exatamente essa janela, e nada alem dela. TTL curto de proposito:
 # depois disso ou o ticket ja saiu de "Draft" (e a propria consulta resolve), ou
 # a sessao morreu e despachar de novo e o certo.
+# No backend `orca` nao existe fila de triagem: nao ha coluna `Draft` para
+# alguem largar pedido, porque nao ha board. A redacao da spec acontece dentro
+# da /orc-task, disparada pelo humano no chat.
+#
+# Sair 1 aqui e o comportamento certo, e nao um bug: a automation simplesmente
+# nunca acorda. Quem quiser o gatilho automatico precisa do backend linear.
+BACK=$("$DIR/backend.sh") || exit 6
+[ "$BACK" = orca ] && exit 1
+
 LOCK_TTL=180
 LOCK="$DIR/../state/triage.lock"
 mkdir -p "$DIR/../state"
@@ -35,6 +44,8 @@ fi
 # Um ticket com "Fast Track" largado em "Draft" e triado normalmente, de
 # proposito: a coluna e a intencao. Excluir por etiqueta faria o card sumir da
 # fila sem ninguem perceber, que e a classe de falha que este sistema mais sofre.
+: "${TEAM:?no backend linear, informe a team key, ex: ACME}"
+
 read -r -d '' Q <<QUERY || true
 {
   issues(filter: {

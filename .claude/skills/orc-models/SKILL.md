@@ -1,11 +1,11 @@
 ---
-name: orchestrator-models
+name: orc-models
 description: |
   Mostra e ajusta qual modelo e qual effort cada etapa do orquestrador usa —
   painel, planejamento, implementacao por nivel de risco, e review. Resolve o
   mapa de verdade rodando o resolver, em vez de so ler o YAML, e explica a
   consequencia de custo antes de mudar.
-  Use sempre que aparecer "/orchestrator-models", "que modelo esta rodando?",
+  Use sempre que aparecer "/orc-models", "que modelo esta rodando?",
   "trocar o modelo", "ajustar o effort", "esta caro demais", ou quando alguem
   quiser saber onde o custo esta indo.
 ---

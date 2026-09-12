@@ -9,7 +9,8 @@
 #   grupo Repo/   + um filho por repo em companies.*.repos
 #   grupo Stack/  + um filho por chave em stacks
 #   grupo Risk/   + high, medium, low
-#   Fast Track    (plana, sem grupo)
+#   Fast Track    (plana) — pedido trivial, pula a redacao da spec
+#   Queue Jump    (plana) — pedido do chat, nao consome vaga da empresa
 #
 # Por que script e nao instrucao na skill: o nome da etiqueta precisa ser
 # identico byte a byte a chave do registry — e a chave da resolucao inteira, e
@@ -28,7 +29,7 @@ APLICAR=0
 [ "${1:-}" = "--apply" ] && APLICAR=1
 
 command -v jq >/dev/null || { echo "falta jq" >&2; exit 1; }
-[ -f "$REG" ] || { echo "registry.yaml nao existe — rode /orchestrator-setup" >&2; exit 1; }
+[ -f "$REG" ] || { echo "registry.yaml nao existe — rode /orc-setup" >&2; exit 1; }
 
 TEAM=$(grep -m1 'linear_team:' "$REG" | awk '{print $2}')
 [ -n "${TEAM:-}" ] || { echo "linear_team nao encontrado no registry" >&2; exit 1; }
@@ -69,11 +70,11 @@ grupo_id() {
 
 criar() {  # criar <nome> <grupo|filho:<parent_id>|plana>
   local nome="$1" modo="$2" campos
-  campos="teamId: \\\"$TEAM_ID\\\", name: \\\"$nome\\\""
+  campos="teamId: \"$TEAM_ID\", name: \"$nome\""
   case "$modo" in
     grupo)   campos="$campos, isGroup: true" ;;
     plana)   : ;;                                   # nem grupo, nem filho
-    filho:*) campos="$campos, parentId: \\\"${modo#filho:}\\\"" ;;
+    filho:*) campos="$campos, parentId: \"${modo#filho:}\"" ;;
     *) echo "modo invalido: $modo" >&2; return 1 ;;
   esac
   local out
@@ -89,6 +90,7 @@ for g in Repo Risk Stack; do
   [ -n "$(grupo_id "$g")" ] || FALTA_GRUPO+=("$g")
 done
 existe - "Fast Track" || FALTA_GRUPO+=("Fast Track(plana)")
+existe - "Queue Jump" || FALTA_GRUPO+=("Queue Jump(plana)")
 
 while IFS=$'\t' read -r g n; do
   [ -z "${g:-}" ] && continue
@@ -139,27 +141,39 @@ fi
 # --- aplicar ---------------------------------------------------------------
 echo
 echo "criando..."
-for g in "${FALTA_GRUPO[@]}"; do
-  if [ "$g" = "Fast Track(plana)" ]; then
-    id=$(criar "Fast Track" plana)
-    [ -n "$id" ] && echo "  + Fast Track (plana)" || echo "  ! Fast Track falhou"
-  else
-    id=$(criar "$g" grupo)
-    [ -n "$id" ] && echo "  + grupo $g/" || echo "  ! grupo $g/ falhou"
-  fi
-done
+# bash 3.2 (o do macOS) com `set -u` trata "${vazio[@]}" como variavel nao
+# definida e aborta. Guardar pelo tamanho funciona nas duas versoes, e
+# preserva nome com espaco — que `$(...)` sem aspas destruiria.
+if [ ${#FALTA_GRUPO[@]} -gt 0 ]; then
+  for g in "${FALTA_GRUPO[@]}"; do
+    case "$g" in
+      *"(plana)")
+        nome_plano="${g%(plana)}"
+        id=$(criar "$nome_plano" plana)
+        [ -n "$id" ] && echo "  + $nome_plano (plana)" || echo "  ! $nome_plano falhou"
+        continue ;;
+    esac
+    if false; then :
+    else
+      id=$(criar "$g" grupo)
+      [ -n "$id" ] && echo "  + grupo $g/" || echo "  ! grupo $g/ falhou"
+    fi
+  done
+fi
 
 # releitura: os grupos recem-criados precisam entrar no cache antes dos filhos
 RESP=$("$DIR/linear-query.sh" "{ teams(filter:{key:{eq:\"$TEAM\"}}, first:1){ nodes{
   id key labels(first:250){ nodes{ id name isGroup parent{ name } } } } } }" 2>/dev/null)
 
-for item in "${FALTA_FILHO[@]}"; do
-  g="${item%%/*}"; n="${item#*/}"
-  pai=$(grupo_id "$g")
-  if [ -z "$pai" ]; then echo "  ! $item — grupo $g/ nao existe"; continue; fi
-  id=$(criar "$n" "filho:$pai")
-  [ -n "$id" ] && echo "  + $item" || echo "  ! $item falhou"
-done
+if [ ${#FALTA_FILHO[@]} -gt 0 ]; then
+  for item in "${FALTA_FILHO[@]}"; do
+    g="${item%%/*}"; n="${item#*/}"
+    pai=$(grupo_id "$g")
+    if [ -z "$pai" ]; then echo "  ! $item — grupo $g/ nao existe"; continue; fi
+    id=$(criar "$n" "filho:$pai")
+    [ -n "$id" ] && echo "  + $item" || echo "  ! $item falhou"
+  done
+fi
 
 echo
 echo "confira: $(basename "$0")"

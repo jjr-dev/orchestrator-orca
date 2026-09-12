@@ -21,22 +21,52 @@ docs/                  armadilhas conhecidas
 
 ## Como funciona, em uma passada
 
+Há duas portas de entrada. Pelo **Linear**, que é o caminho assíncrono:
+
 ```
 voce escreve a ideia no Linear (estado Draft)
         v
-/triage-tickets   le o repo de verdade e reescreve o ticket em formato executavel
+/orc-triage    le o repo de verdade e reescreve o ticket em formato executavel
         v
-voce aprova       arrastando para "Ready for Agent" — este e o unico Start
+voce aprova    arrastando para "Ready for Agent" — este e o unico Start
         v
-/pull-ready       resolve o repo pela etiqueta Repo/, cria o worktree, despacha
+/orc-dispatch  resolve o repo pela etiqueta Repo/, cria o worktree, despacha
         v
-worker            planeja (subagente), implementa, revisa (subagente), abre o PR
+worker         planeja (subagente), implementa, revisa (subagente), abre o PR
         v
-voce revisa e faz o merge                    <- o merge nunca e automatico
+voce revisa e faz o merge              <- o merge nunca e automatico
 ```
 
 Os cronjobs rodam a triagem e o despacho a cada 2 minutos, mas só acordam o
-agente quando ha trabalho: um precheck barato decide antes.
+agente quando há trabalho: um precheck barato decide antes.
+
+Ou pelo **chat**, quando você já sabe o que quer e não precisa da fila:
+
+```
+/orc-task "<pedido>" --repo "Acme - API" --repo "Acme - Web"
+        v
+cria o ticket no Linear (pai + um filho por repo), aplica Repo/, Risk/ e Stack/
+        v
+redige a spec lendo o codigo, e MOSTRA no chat            <- para aqui
+        v
+voce le, pede ajuste na conversa, e diz "pode executar"
+        v
+worker         (identico ao caminho de cima)
+```
+
+O ticket é criado de qualquer jeito — o Linear continua sendo o histórico de
+execução. O que muda é que **a conversa substitui o board**: você lê a spec e
+aprova no chat, sem abrir o Linear.
+
+Enquanto espera, os tickets ficam em `Drafted`. Nenhum cronjob olha esse estado,
+então eles aguardam o tempo que você precisar sem ninguém despachar por engano.
+Se a conversa morrer, a próxima retoma de onde parou.
+
+Ajustes são pedidos na mesma conversa, quantas voltas forem necessárias. O
+portão só abre com um "pode executar".
+
+Com `--fast` ele pula a redação **e o portão**: vai direto para execução, como um
+`Fast Track`. Use para o que é obviamente pequeno, onde não há spec para ler.
 
 ---
 
@@ -80,10 +110,10 @@ cd orchestrator
 claude
 ```
 
-## Passo 4 — `/orchestrator-setup`
+## Passo 4 — `/orc-setup`
 
 ```
-/orchestrator-setup
+/orc-setup
 ```
 
 Ela diagnostica, mostra **um** plano, pede **uma** confirmacao, executa e
@@ -93,8 +123,8 @@ verifica. Rodar de novo só completa o que faltou — nunca refaz o que existe.
 |---|---|
 | diagnóstico | `bin/doctor.sh` diz o que já existe é o que falta |
 | registry | copia `registry.example.yaml` para `registry.yaml` se ainda não houver |
-| Linear | chama `/orchestrator-linear`: token, 9 estados, grupos de etiqueta |
-| repos | chama `/orchestrator-repo-add` para cada um: Orca + etiqueta + registry |
+| Linear | chama `/orc-linear`: token, 9 estados, grupos de etiqueta |
+| repos | chama `/orc-repo-add` para cada um: Orca + etiqueta + registry |
 | subagentes | `bin/install-agents.sh` copia para `~/.claude/agents/` |
 | teste manual | roda os prechecks e um despacho de verdade, antes de qualquer cron |
 | cronjobs | lê `orca automations create --help` e cria as três automations |
@@ -206,11 +236,11 @@ O setup termina aqui, e **sem estes itens o sistema fica mudo**:
 Nesta ordem, e só siga se cada uma passar:
 
 1. `./bin/has-ready.sh <TEAM>` — deve sair 1 com a fila vazia
-2. `/reconcile` com tudo limpo — deve dizer "tudo consistente"
-3. um ticket real com `/pull-ready <empresa>`, acompanhando na tela
+2. `/orc-reconcile` com tudo limpo — deve dizer "tudo consistente"
+3. um ticket real com `/orc-dispatch <empresa>`, acompanhando na tela
    (com o argumento, para não puxar todas as empresas no primeiro teste)
 4. **só então** deixe os cronjobs rodarem
-5. teste de propósito: reinicie o Orca no meio de um ticket e rode `/reconcile`.
+5. teste de propósito: reinicie o Orca no meio de um ticket e rode `/orc-reconcile`.
    O ticket tem que voltar para `Ready for Agent` com comentário.
 
 Ligar cron antes de o caminho manual funcionar transforma um erro de
@@ -231,16 +261,18 @@ instalação pronta com FALHA aberta.**
 
 | Preciso... | Comando |
 |---|---|
-| acrescentar um repositório | `/orchestrator-repo-add` |
-| ver ou trocar modelo e effort | `/orchestrator-models` |
-| criar estado ou etiqueta que falta | `/orchestrator-linear` |
-| descobrir por que um ticket não anda | `/orchestrator-sync` |
-| conferir se está tudo ligado | `/orchestrator-doctor` |
+| não lembro o comando | `/orc-help` |
+| começar uma demanda nova | `/orc-task` |
+| acrescentar um repositório | `/orc-repo-add` |
+| ver ou trocar modelo e effort | `/orc-models` |
+| criar estado ou etiqueta que falta | `/orc-linear` |
+| descobrir por que um ticket não anda | `/orc-sync` |
+| conferir se está tudo ligado | `/orc-doctor` |
 
 ## Acrescentar um repositório
 
 ```
-/orchestrator-repo-add
+/orc-repo-add
 ```
 
 Três sistemas precisam concordar — Orca (sabe clonar), Linear (tem a etiqueta) e
@@ -254,7 +286,7 @@ Divergir num espaço deixa todo ticket daquele repo invisível.
 ## Ajustar modelo e effort
 
 ```
-/orchestrator-models
+/orc-models
 ```
 
 Mostra qual modelo e qual `effort` cada etapa está usando de verdade, e aplica a
@@ -265,7 +297,7 @@ valor é aplicado.
 ## Quando as três pontas divergirem
 
 ```
-/orchestrator-sync
+/orc-sync
 ```
 
 A divergência típica nasce de uma edição pela interface do Linear: alguém
@@ -329,7 +361,7 @@ cliente, id de repo e a topologia inteira da sua operação.
 
 | Sintoma | Causa provável | Onde olhar |
 |---|---|---|
-| nenhum ticket é despachado | etiqueta `Repo/` faltando ou com nome divergente | `/orchestrator-sync` |
+| nenhum ticket é despachado | etiqueta `Repo/` faltando ou com nome divergente | `/orc-sync` |
 | o cron não dispara | estado renomeado no Linear, ou precheck sem `+x` | `./bin/doctor.sh` |
 | `orca` diz que não está rodando | o app está fechado | abra o Orca |
 | a chave existe mas o Orca não a vê | criada depois de o app abrir | reinicie o Orca |
@@ -367,7 +399,7 @@ usa a ref local, que pode estar dias atrás.
 
 Escrever `development` em vez de `origin/development` faz o worker implementar
 sobre código velho **sem nada acusar** — o PR abre, passa no review, e o
-problema só aparece no conflito de merge. Por isso o `/pull-ready` recusa
+problema só aparece no conflito de merge. Por isso o `/orc-dispatch` recusa
 despachar repo cuja `base` não comece com `origin/`, e o `doctor` checa.
 
 ## O código sai sem comentário explicativo
@@ -382,7 +414,7 @@ alguém procura depois. Em comentário de código ele apodreceria.
 
 ## Worktrees de ticket se limpam sozinhos
 
-O `/reconcile` diário roda a limpeza e remove worktree que fechou o ciclo. Ele
+O `/orc-reconcile` diário roda a limpeza e remove worktree que fechou o ciclo. Ele
 só olha branch do padrão do orquestrador — worktree que você criou na mão nunca
 entra — e só remove quem passa nas quatro condições:
 
@@ -466,7 +498,7 @@ A ausência da seção `### Gate` no PR significa "este repo não tem gate", nun
 
 ### Ligar num repo existente
 
-Gate não é modelo, então não passa pelo `/orchestrator-models`. Edite
+Gate não é modelo, então não passa pelo `/orc-models`. Edite
 `gate` no `registry.yaml` direto. Depois confira:
 
 ```bash
@@ -605,13 +637,13 @@ só o delta. Reescrever faria o worker reimplementar o que já está pronto.
 ## Pedir ajuste falando
 
 ```
-/ajustar <IDENT> <o que voce quer>
+/orc-adjust <IDENT> <o que voce quer>
 ```
 
 O painel lê a árvore, lê o código para descobrir quais repos o pedido toca,
 escreve a nova leva nos filhos certos e despacha — sem passar por
 `Ready for Agent`. O pedido no chat **é** a aprovação humana, e por isso só o
-`/ajustar` pode despachar direto: nenhuma automation ganha esse direito.
+`/orc-adjust` pode despachar direto: nenhuma automation ganha esse direito.
 
 ## Modelos por etapa
 
@@ -623,7 +655,7 @@ onde cada valor é aplicado.
 Para ver o que está valendo e mudar:
 
 ```
-/orchestrator-models
+/orc-models
 ```
 
 Ou edite o registry direto — as duas formas são equivalentes.

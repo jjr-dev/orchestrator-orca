@@ -1,11 +1,11 @@
 ---
-name: pull-ready
+name: orc-dispatch
 description: |
   Puxa os tickets do Linear que estao em "Ready for Agent", valida se estao
   realmente prontos, faz o claim movendo para "Scheduled" e despacha um worker
   autonomo por ticket no worktree do repositorio correto. Roda em loop pela
   automation do Orca, mas tambem pode ser chamada na mao.
-  Use sempre que aparecer "/pull-ready", "puxa os tickets prontos", "roda o
+  Use sempre que aparecer "/orc-dispatch", "puxa os tickets prontos", "roda o
   poller", "tem algo pronto para agente?", ou quando uma automation do Orca
   disparar com o nome de uma empresa como argumento.
 ---
@@ -218,9 +218,15 @@ sai desta rodada, mas as outras continuam — nunca pare tudo porque uma encheu,
 isso deixaria as demais famintas. Respeite tambem `wip_max_global` somando todas
 as empresas: quando ele estourar, ai sim pare.
 
-Ordene os elegiveis por: prioridade do Linear, depois numero de tickets que cada
-um desbloqueia (quem desbloqueia mais vai primeiro), depois data de criacao.
-A ordenacao atravessa empresas — um P0 de uma passa na frente de um P3 de outra.
+**Ticket com `Queue Jump` nao conta na vaga da empresa.** Ele veio do chat, onde
+o humano pediu na hora, e o limite por empresa e justica entre empresas — nao se
+aplica a quem foi chamado pelo nome. Ele continua contando no `wip_max_global`,
+que protege a maquina e nao admite excecao.
+
+Ordene os elegiveis por: **`Queue Jump` primeiro**, depois prioridade do Linear,
+depois numero de tickets que cada um desbloqueia (quem desbloqueia mais vai
+primeiro), depois data de criacao. A ordenacao atravessa empresas — um P0 de uma
+passa na frente de um P3 de outra.
 
 ## Passo 4 - Claim
 
@@ -431,7 +437,7 @@ texto em vez de virar submit. Resultado: sessao viva, prompt carregado no input,
 ACME-26; o ACME-25, da mesma leva e com prompt do mesmo tamanho, submeteu normal —
 e intermitente, nao deterministico.
 
-Isso e invisivel para o `/reconcile` e para o proprio Passo 1: existe dispatch,
+Isso e invisivel para o `/orc-reconcile` e para o proprio Passo 1: existe dispatch,
 existe worktree, existe terminal. Os quatro testes passam.
 
 Depois de CADA `worker-start`:
@@ -459,7 +465,7 @@ Confirme uma segunda vez. Se ainda assim nao houver agente em `working`:
   `worker-start` cria worker duplicado no mesmo ticket
 - registre no relatorio como `despachado (NAO confirmado)` com o handle do
   terminal, para o humano olhar
-- deixe o ticket em `Scheduled`: o `/reconcile` vai reencontra-lo
+- deixe o ticket em `Scheduled`: o `/orc-reconcile` vai reencontra-lo
 
 O sinal que denuncia esse estado, e que vale checar quando houver duvida, e
 `last_heartbeat_at = null` no `dispatch-show` combinado com nenhum agente em

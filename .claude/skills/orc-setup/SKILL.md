@@ -1,14 +1,14 @@
 ---
-name: orchestrator-setup
+name: orc-setup
 description: |
   Instala o orquestrador do zero numa maquina nova: confere pre-requisitos, cria
   o registry a partir do template, configura o Linear, registra os repos no Orca,
   instala os subagentes, cria os cronjobs (automations) e fecha com o checklist
   do que so o humano consegue fazer no app. Idempotente: rodar de novo completa
   so o que falta.
-  Use sempre que aparecer "/orchestrator-setup", "instalar o orquestrador",
+  Use sempre que aparecer "/orc-setup", "instalar o orquestrador",
   "configurar do zero", "acabei de clonar", "maquina nova", ou quando o
-  /orchestrator-doctor acusar que falta parte da instalacao.
+  /orc-doctor acusar que falta parte da instalacao.
 ---
 
 # Instalacao
@@ -67,7 +67,7 @@ Levante com o humano, e so isto:
 
 ## Passo 3 — Linear
 
-Chame `/orchestrator-linear`. **Nao reimplemente**: token, estados e etiquetas
+Chame `/orc-linear`. **Nao reimplemente**: token, estados e etiquetas
 tem uma implementacao so, e ela mora la.
 
 Ela cuida do token sem nunca toca-lo, cria os 9 estados com o `type` e a
@@ -76,7 +76,7 @@ plana.
 
 ## Passo 4 — Repos
 
-Para cada repositorio, chame `/orchestrator-repo-add`. Ela registra no Orca,
+Para cada repositorio, chame `/orc-repo-add`. Ela registra no Orca,
 cria a etiqueta `Repo/` e escreve no registry, nessa ordem.
 
 Descubra o que der para descobrir — base branch, lockfile — e **pergunte a base
@@ -131,8 +131,8 @@ ticket de risco baixo, e a divisao de papeis viraria decoracao.
 Nesta ordem, e **so siga se cada uma passar**:
 
 1. `./bin/has-ready.sh <TEAM>` — deve sair 1 com a fila vazia
-2. `/reconcile` com tudo limpo — deve dizer "tudo consistente"
-3. um ticket real com `/pull-ready <empresa>`, acompanhando na tela
+2. `/orc-reconcile` com tudo limpo — deve dizer "tudo consistente"
+3. um ticket real com `/orc-dispatch <empresa>`, acompanhando na tela
 
 Ligar cron antes de o caminho manual funcionar transforma um bug de configuracao
 em um bug intermitente que dispara a cada 2 minutos.
@@ -155,9 +155,9 @@ Tres automations:
 
 | Nome | Cadencia | Precheck | Prompt |
 |---|---|---|---|
-| `pull-all` | `*/2 * * * *` | `bin/has-ready.sh <TEAM>` | `/pull-ready` |
-| `triage-all` | `1-59/2 * * * *` | `bin/has-triage.sh <TEAM>` | `/triage-tickets` |
-| `morning-reset` | `0 8 * * 1-5` | — | `/reconcile` |
+| `pull-all` | `*/2 * * * *` | `bin/has-ready.sh <TEAM>` | `/orc-dispatch` |
+| `triage-all` | `1-59/2 * * * *` | `bin/has-triage.sh <TEAM>` | `/orc-triage` |
+| `morning-reset` | `0 8 * * 1-5` | — | `/orc-reconcile` |
 
 🔴 **O escalonamento par/impar nao e estetico.** `*/2` sao os minutos pares e
 `1-59/2` os impares. As duas primeiras compartilham a mesma sessao no mesmo

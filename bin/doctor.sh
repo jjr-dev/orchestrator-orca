@@ -40,7 +40,7 @@ py 'import yaml' && ok "python yaml" || falha "modulo yaml ausente" "python3 -m 
 # ---------------------------------------------------------------- 2. registry
 secao "registry"
 if [ ! -f registry.yaml ]; then
-  falha "registry.yaml nao existe" "rode /orchestrator-setup, ou cp registry.example.yaml registry.yaml"
+  falha "registry.yaml nao existe" "rode /orc-setup, ou cp registry.example.yaml registry.yaml"
 else
   if reg 'pass'; then
     ok "registry.yaml parseia"
@@ -83,7 +83,42 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
   else falha "registry.yaml NAO esta ignorado" "publicar o repo publicaria sua config"; fi
 fi
 
-# ---------------------------------------------------------------- 3. linear
+# ---------------------------------------------------------------- 3. backend
+secao "backend"
+BACK=$(./bin/backend.sh 2>/dev/null)
+if [ -z "$BACK" ]; then
+  falha "nao consegui ler defaults.backend" "sem isso os prechecks saem 6 e a fila para em silencio"
+  BACK=indefinido
+else
+  ok "backend: $BACK"
+fi
+for p in bin/backend.sh bin/board.sh; do
+  [ -x "$p" ] && ok "$p executavel" || falha "$p ausente ou sem +x" "as skills nao conseguem registrar trabalho"
+done
+[ "$(./bin/board.sh backend 2>/dev/null)" = "$BACK" ] \
+  && ok "board.sh concorda com backend.sh" \
+  || falha "board.sh e backend.sh divergem" "um deles esta lendo outro registry"
+
+if [ "$BACK" = orca ]; then
+  [ -x bin/orca-board.py ] && ok "bin/orca-board.py executavel" || falha "bin/orca-board.py ausente"
+  if orca orchestration task-list --json >/dev/null 2>&1; then
+    QTD=$(orca orchestration task-list --json | jq -r '.result.count // 0')
+    QTD_READY=$(orca orchestration task-list --ready --json | jq -r '.result.count // 0')
+    ok "orca responde: $QTD task(s) no run atual, $QTD_READY na fila ready"
+  else
+    falha "orca orchestration nao responde" "o backend orca nao tem onde gravar"
+  fi
+  D=$(ls state/drafts/*.md 2>/dev/null | wc -l | tr -d ' ')
+  [ "$D" -gt 0 ] && aviso "$D rascunho(s) em state/drafts esperando aprovacao" "veja com board.sh list-drafts" \
+                 || ok "nenhum rascunho pendente"
+fi
+
+# ---------------------------------------------------------------- 4. linear
+if [ "$BACK" != linear ]; then
+  secao "linear"
+  ok "backend e '$BACK': pulei as checagens do Linear (token, estados, etiquetas)"
+  TEAM=""
+else
 secao "linear"
 TEAM=$(reg 'print(next(iter(d["companies"].values()))["linear_team"])' 2>/dev/null)
 if [ -z "${TEAM:-}" ]; then
@@ -137,6 +172,8 @@ for n in (d.get('stacks') or {}):
         || falha "stack sem etiqueta Stack/" "$(echo "$SEM_STACK" | tr '\n' ' ')— rode ./bin/sync-labels.sh --apply"
     fi
   fi
+fi
+
 fi
 
 # ---------------------------------------------------------------- 4. modelos
@@ -203,7 +240,7 @@ if grep -qi 'not running\|Start the Orca app' <<<"$LISTA"; then
   aviso "o app do Orca esta fechado" "nao da para checar as automations; abra o Orca e rode de novo"
   LISTA=""
 elif [ -z "$LISTA" ]; then
-  aviso "nenhuma automation encontrada" "nada roda sozinho; rode /orchestrator-setup"
+  aviso "nenhuma automation encontrada" "nada roda sozinho; rode /orc-setup"
 else
   for nome in pull-all triage-all morning-reset; do
     LINHA=$(grep -A1 -- "$nome" <<<"$LISTA" | head -2)
@@ -220,6 +257,58 @@ fi
 for p in bin/has-ready.sh bin/has-triage.sh; do
   [ -x "$p" ] && ok "precheck $p executavel" || falha "$p sem permissao de execucao" "o cron nunca dispara"
 done
+
+# ----------------------------------------------------- 7. porta de escrita
+# Este bloco existe porque a falha caracteristica deste projeto e config que
+# parece ligada e nao esta. O linear.sh ser rapido nao adianta se as skills
+# continuarem chamando `orca linear` para escrever.
+secao "porta de escrita no Linear"
+
+for p in bin/linear.sh bin/linear-api.py; do
+  [ -x "$p" ] && ok "$p executavel" || falha "$p ausente ou sem +x" "as escritas voltam a passar pelo orca"
+done
+
+if [ -n "${TEAM:-}" ] && [ -x bin/linear.sh ]; then
+  if ./bin/linear.sh cache --refresh --team "$TEAM" >/dev/null 2>&1; then
+    RESUMO=$(python3 - <<'PYX' 2>/dev/null
+import json
+c=json.load(open("state/linear-cache.json"))
+t=next(iter(c["teams"].values()))
+print(f'{len(t["estados"])} estados, {len(t["etiquetas"])+len(t["qualificadas"])} etiquetas'
+      + (f'; AMBIGUAS: {", ".join(t["ambiguas"])}' if t["ambiguas"] else ''))
+PYX
+)
+    case "$RESUMO" in
+      *AMBIGUAS*) aviso "cache montado ($RESUMO)" "etiqueta com nome repetido entre grupos exige a forma Grupo/Nome" ;;
+      "")         falha "cache do linear.sh ilegivel" ;;
+      *)          ok "cache do linear.sh: $RESUMO" ;;
+    esac
+  else
+    falha "bin/linear.sh nao conseguiu montar o cache" "escrita rapida indisponivel"
+  fi
+fi
+
+SOBROU=$(grep -rln "orca linear save-issue\|orca linear status set\|orca linear comment add\|orca linear label " \
+  .claude/ 2>/dev/null | tr '\n' ' ')
+if [ -n "$SOBROU" ]; then
+  aviso "ainda escrevem pelo orca: $SOBROU" "3 a 14x mais lento; troque por bin/linear.sh"
+else
+  ok "nenhuma skill escreve no Linear pelo orca"
+fi
+
+# Skill que chama bin/linear.sh direto funciona hoje e quebra no dia em que o
+# backend virar orca, onde esse script nao existe. E a definicao de
+# configuracao que parece ligada e nao esta.
+DIRETO=$(grep -rln 'bin/linear\.sh' .claude/ 2>/dev/null | tr '\n' ' ')
+if [ -n "$DIRETO" ]; then
+  aviso "chamam bin/linear.sh direto: $DIRETO" "no backend orca isso nao existe; troque por bin/board.sh"
+else
+  ok "as skills passam todas pelo bin/board.sh"
+fi
+
+VELHO=$(find state -name 'triage.lock' -mmin +10 2>/dev/null)
+[ -n "$VELHO" ] && aviso "state/triage.lock parado ha mais de 10 min" "TTL e 180s; e lixo, pode apagar" \
+                || ok "sem lock de triagem esquecido"
 
 # ---------------------------------------------------------------- resumo
 printf '\n  %s%d ok%s, %s%d aviso(s)%s, %s%d falha(s)%s\n' \

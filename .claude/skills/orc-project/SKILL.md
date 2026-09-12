@@ -1,11 +1,11 @@
 ---
-name: orchestrate-project
+name: orc-project
 description: |
   Modo manual e de planejamento: recebe uma etiqueta Repo/ ou um projeto do Linear,
   monta o grafo de dependencias e imprime a tabela de ondas — quem entra agora, quem
   espera qual merge, e qual e o caminho mais longo do grafo. Com --run, despacha a
   primeira onda; sem, so mostra.
-  Use sempre que aparecer "/orchestrate-project", "monta as ondas", "como fica o
+  Use sempre que aparecer "/orc-project", "monta as ondas", "como fica o
   grafo desse projeto", "o que da pra rodar em paralelo", "planeja esse projeto",
   ou quando o usuario colar um link de projeto do Linear querendo ver o plano.
 ---
@@ -14,7 +14,7 @@ description: |
 
 Argumentos: `<etiqueta Repo/ | url de projeto do Linear> [--run]`
 
-O fluxo do dia a dia e a `/pull-ready`, que nao tem barreira de onda: cada ticket
+O fluxo do dia a dia e a `/orc-dispatch`, que nao tem barreira de onda: cada ticket
 entra assim que os proprios blockers fecham. Esta skill existe para **enxergar** o
 projeto inteiro antes de comecar.
 
@@ -61,5 +61,5 @@ Aponte tambem os tickets que introduzem flag OFF por padrao. Nunca ligue a flag.
 
 ## Passo 5 - Despachar (so com --run)
 
-Sem `--run`, pare no relatorio. Com `--run`, delegue para a `/pull-ready` da
+Sem `--run`, pare no relatorio. Com `--run`, delegue para a `/orc-dispatch` da
 empresa correspondente — nao duplique aqui a logica de claim e dispatch.
