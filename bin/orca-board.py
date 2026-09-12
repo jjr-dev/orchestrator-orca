@@ -255,6 +255,72 @@ def cmd_list_drafts(a):
     return {"drafts": saida}
 
 
+def regras_do_repo(nome):
+    """Le do registry o que o worker precisa saber sobre ESTE repositorio."""
+    try:
+        import yaml
+        d = yaml.safe_load(open(os.path.join(RAIZ, "registry.yaml"))) or {}
+    except Exception:
+        return {}
+    for e in (d.get("companies") or {}).values():
+        r = (e.get("repos") or {}).get(nome)
+        if r:
+            return r
+    return {}
+
+
+def montar_prompt(spec, campos):
+    """Poe a spec dentro do prompt que o worker realmente recebe.
+
+    A task do Orca nao tem "prompt" separado: o campo `spec` E o que o worker le.
+    No backend linear quem compoe isto e o /orc-dispatch, na hora do despacho.
+    Aqui o equivalente e o promote — se ele entregasse a spec crua, o worker
+    comecaria sem a politica de execucao, sem a base branch e sem saber que nao
+    pode rodar comando do projeto. Nada acusaria: ele so faria diferente.
+    """
+    r = regras_do_repo(campos.get("repo") or "")
+    gate = r.get("gate") or []
+    manual = r.get("manual") or []
+
+    linhas = [
+        "LEIA ISTO PRIMEIRO, antes de qualquer outra coisa:",
+        f"  cat {os.path.join(RAIZ, '.claude/worker-workflow.md')}",
+        "",
+    ]
+    if campos.get("repo"):
+        linhas += [f"Repo: **{campos['repo']}**"]
+    if r.get("base"):
+        linhas += [f"Base branch do PR: **{r['base']}**"]
+    linhas += [
+        "",
+        "## Regras que valem mesmo que voce nao leia mais nada",
+        "",
+        "- NAO execute comando nenhum do projeto: lint, build, teste, migration,",
+        "  servidor de dev, nem instalar dependencia.",
+        "- NAO faca merge. Nunca.",
+        "- NUNCA use `orca orchestration ask` — bloqueia por 10 min e ninguem responde.",
+        "- Antes de commitar: rm -f PLAN.md, e nunca `git add -A`.",
+        "- Nada no commit nem no PR indica que foi escrito por IA.",
+        "- Reporte worker_done exatamente uma vez.",
+        "",
+        "## Politica de execucao deste repo",
+        "",
+    ]
+    if gate:
+        linhas += ["Rode EXATAMENTE estes comandos antes de abrir o PR, e nada alem:"]
+        linhas += [f"- `{c}`" for c in gate]
+    else:
+        linhas += [
+            "`gate` esta **vazio de proposito**: voce nao roda nada. A lista abaixo e o",
+            "roteiro HUMANO — transcreva literal no corpo do PR, como comandos, **sem",
+            "saida**, porque voce nao executou nenhum:",
+            "",
+        ]
+        linhas += [f"- `{c}`" for c in manual] or ["- (nenhum comando declarado)"]
+    linhas += ["", "---", "", "# Especificacao (inline, autocontida)", ""]
+    return "\n".join(linhas) + "\n" + FRONT.sub("", spec).lstrip()
+
+
 def cmd_promote(a):
     """Aprovado: o rascunho vira task do Orca, ja na fila `ready`."""
     criadas = []
@@ -270,7 +336,8 @@ def cmd_promote(a):
         titulo = a.title or f.get("title") or next(
             (l.lstrip("# ").strip() for l in spec.split("\n") if l.startswith("#")), slug)
 
-        args = ["task-create", "--task-title", titulo, "--display-name", titulo, "--spec", spec]
+        args = ["task-create", "--task-title", titulo, "--display-name", titulo,
+                "--spec", montar_prompt(spec, f)]
         if f.get("parent"):
             args += ["--parent", acha(f["parent"])["id"]]
         t = orca(*args)["task"]
