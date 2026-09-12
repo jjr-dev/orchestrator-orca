@@ -32,6 +32,31 @@ printf 'defaults:\n  backend: sei-la\n' > /tmp/ruim.yaml
   && passa "valor desconhecido sai 6" || falha "aceitou backend invalido"
 
 echo
+echo " resolucao da chave: ambiente -> .env -> ~/.zshenv"
+TMPH=$(mktemp -d)
+cp .env /tmp/env.teste.bak 2>/dev/null || true
+if [ -f .env ]; then
+  env -u LINEAR_API_KEY HOME="$TMPH" ./bin/linear-query.sh '{ viewer { id } }' 2>/dev/null \
+    | grep -q '"viewer"' && passa "le do .env sem depender do ~/.zshenv" \
+    || falha ".env nao resolveu a chave"
+  # linha vazia tem que falhar FALANDO, nao em silencio
+  python3 -c "
+import re,pathlib
+p=pathlib.Path('.env'); p.write_text(re.sub(r'^LINEAR_API_KEY=.*\$','LINEAR_API_KEY=',p.read_text(),flags=re.M))"
+  OUT=$(env -u LINEAR_API_KEY HOME="$TMPH" bash -c '. ./bin/linear-key.sh' 2>&1)
+  echo "$OUT" | grep -q "esta vazia" && passa "linha vazia: diz exatamente qual arquivo e qual linha" \
+    || falha "mensagem inutil com .env vazio" "$OUT"
+  cp /tmp/env.teste.bak .env && rm -f /tmp/env.teste.bak
+  env -u LINEAR_API_KEY HOME="$TMPH" ./bin/linear-query.sh '{ viewer { id } }' >/dev/null 2>&1 \
+    && passa ".env restaurado e funcionando" || falha "nao restaurei o .env"
+else
+  passa "sem .env nesta maquina (pulado)"
+fi
+[ -f .env.example ] && ! grep -qE '^LINEAR_API_KEY=.+' .env.example \
+  && passa ".env.example existe e nao tem valor real" || falha ".env.example ausente ou com segredo"
+rm -rf "$TMPH"
+
+echo
 echo " troca de backend pela porta unica"
 ./bin/registry-edit.py set-backend orca >/dev/null 2>&1
 [ "$(./bin/backend.sh)" = orca ] && passa "trocou para orca" || falha "nao trocou"
@@ -68,13 +93,22 @@ grep -q '<!-- orch' state/drafts/teste-rascunho.md \
   && passa "front-matter e comentario HTML (invisivel no markdown)" || falha "front-matter ausente"
 
 echo
-echo " o que o orca nao faz, ele recusa explicando"
-for v in "update --body x teste-rascunho" "comment --body x teste-rascunho" "label --add x teste-rascunho"; do
-  OUT=$(./bin/board.sh $v 2>&1)
-  if [ $? -eq 0 ]; then falha "deveria recusar: $v"
-  elif echo "$OUT" | grep -qi "PLAN.md\|front-matter\|ajuste ANTES"; then
-    passa "recusa '${v%% *}' dizendo o que usar no lugar"
-  else falha "recusou '${v%% *}' sem explicar" "$OUT"; fi
+echo " o que o orca nao faz: recusa ou ignora, nunca em silencio"
+
+# `update` PRECISA falhar: nao gravar uma spec em silencio faria o worker
+# implementar a versao velha. `comment` e `label` nao: parar o worker por causa
+# de um comentario custa mais do que o comentario vale. Os dois casos avisam.
+OUT=$(./bin/board.sh update --body x teste-rascunho 2>&1)
+if [ $? -eq 0 ]; then falha "update deveria FALHAR (spec errada e perigosa)"
+elif echo "$OUT" | grep -qi "ajuste ANTES"; then passa "update falha e diz o caminho certo"
+else falha "update falhou sem explicar" "$OUT"; fi
+
+for v in "comment --body x teste-rascunho" "label --add x teste-rascunho"; do
+  OUT=$(./bin/board.sh $v 2>&1); RC=$?
+  if [ $RC -ne 0 ]; then falha "'${v%% *}' deveria sair 0 (nao pode parar o worker)"
+  elif echo "$OUT" | grep -qi "NAO gravado\|NAO alterada"; then
+    passa "'${v%% *}' ignora mas AVISA onde a informacao vive"
+  else falha "'${v%% *}' ignorou em silencio" "$OUT"; fi
 done
 
 echo

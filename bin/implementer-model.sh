@@ -52,6 +52,27 @@ emergencia() {
 
 IDENT="${1:-}"
 [ -n "$IDENT" ] || emergencia "sem IDENT"
+
+# No backend `orca` o risco nao vem de etiqueta: vem do front-matter da spec,
+# que o `orca-board.py list` ja devolve parseado. Sem este ramo o IDENT
+# `task_xxx` reprovaria na validacao numerica abaixo e TUDO cairia no
+# opus/xhigh da emergencia — o roteamento por risco existiria no papel e nunca
+# aconteceria, que e exatamente a falha que este projeto mais sofre.
+BACK=$("$DIR/backend.sh" 2>/dev/null) || BACK=linear
+if [ "$BACK" = orca ]; then
+  INFO=$(
+    { "$DIR/orca-board.py" list 2>/dev/null; "$DIR/orca-board.py" list-drafts 2>/dev/null; } \
+    | jq -rs --arg i "$IDENT" '
+        [ .[] | (.issues // .drafts // [])[] | select(.identifier == $i) ][0]
+        | if . then "\(.risk // "")\t\(.repo // "")" else "" end' 2>/dev/null
+  )
+  RISCO="${INFO%%$'\t'*}"
+  REPO="${INFO#*$'\t'}"
+  [ "$REPO" = "$INFO" ] && REPO=""
+  ORIGEM="front-matter risk=$RISCO"
+  RESP=""
+else
+
 NUM="${IDENT##*-}"
 [[ "$NUM" =~ ^[0-9]+$ ]] || emergencia "IDENT invalido '$IDENT'"
 
@@ -72,6 +93,8 @@ REPO=$(printf '%s' "$RESP" | jq -r '
   .data.issues.nodes[0].labels.nodes[]? | select(.parent.name == "Repo") | .name' 2>/dev/null | head -1)
 
 ORIGEM="etiqueta Risk/$RISCO"
+fi
+
 if [ -z "${RISCO:-}" ]; then
   if [ -n "${REPO:-}" ]; then
     RISCO=$(REPO="$REPO" REG="$REG" python3 - <<'PY' 2>/dev/null

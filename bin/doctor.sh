@@ -120,6 +120,28 @@ if [ "$BACK" != linear ]; then
   TEAM=""
 else
 secao "linear"
+
+# O .env e a fonte preferida da chave desde 12/09. O ~/.zshenv continua valendo
+# para quem ja tinha, mas nao e mais o caminho que ensinamos: variavel de
+# ambiente depende de o Orca ter subido depois dela existir, e `launchctl setenv`
+# nao sobrevive a reboot. Arquivo no disco nao tem esse problema.
+if [ -f .env ]; then
+  if grep -qE '^[[:space:]]*LINEAR_API_KEY=.+' .env; then
+    ok ".env existe e tem LINEAR_API_KEY preenchida"
+  else
+    falha ".env existe mas LINEAR_API_KEY esta vazia" "abra e preencha; o resto do Linear nao vai funcionar"
+  fi
+  PERM=$(stat -f '%Lp' .env 2>/dev/null || stat -c '%a' .env 2>/dev/null)
+  [ "$PERM" = 600 ] && ok ".env com permissao 600" \
+    || aviso ".env com permissao $PERM" "e um arquivo de credencial: chmod 600 .env"
+elif grep -qE '^[[:space:]]*(export[[:space:]]+)?LINEAR_API_KEY=.+' "$HOME/.zshenv" 2>/dev/null; then
+  aviso "chave vem do ~/.zshenv, nao do .env" "funciona, mas o .env e mais confiavel: cp .env.example .env"
+else
+  falha "nenhuma fonte para LINEAR_API_KEY" "cp .env.example .env e preencha"
+fi
+[ -f .env.example ] && ok ".env.example versionado (o template)" \
+  || falha ".env.example ausente" "o /orc-setup nao tem de onde criar o .env"
+
 TEAM=$(reg 'print(next(iter(d["companies"].values()))["linear_team"])' 2>/dev/null)
 if [ -z "${TEAM:-}" ]; then
   aviso "sem linear_team no registry" "pulei as checagens do Linear"

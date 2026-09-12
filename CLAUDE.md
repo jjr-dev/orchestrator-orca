@@ -274,8 +274,26 @@ despacha — sem passar por `Ready for Agent`.
     executa e verifica. Nao pergunte item por item: sao ~15 confirmacoes num
     setup completo, e isso treina qualquer um a aprovar no automatico.
 32. **Nunca peca, aceite ou grave o token do Linear.** Se o humano colar um no
-    chat, avise que vazou para o transcript e que o certo e revogar. Quando
-    falta, entregue o comando com `!` para ele proprio rodar.
+    chat, avise que vazou para o transcript e que o certo e revogar.
+
+    Quando falta, o caminho e **o arquivo, nao um comando**: `cp .env.example
+    .env` e o humano preenche a linha `LINEAR_API_KEY=`. O `.env` esta no
+    `.gitignore`; o `.env.example` e versionado e nunca leva valor real.
+
+    Mudou em 12/09. Antes entregavamos um comando com `!` para ele rodar no
+    terminal, o que gravava em `~/.zshenv` ou via `launchctl setenv`. Os dois
+    falham do mesmo jeito: o precheck roda como filho do app do Orca, que so
+    herda o ambiente existente quando o app subiu, e `launchctl setenv` nao
+    sobrevive a reboot. O sintoma era o precheck sair 4 e a automation nunca
+    disparar, em silencio. Arquivo no disco nao depende de ordem de
+    inicializacao.
+
+    O `~/.zshenv` continua sendo lido por ultimo, para nao quebrar quem ja tinha.
+    Ordem em `bin/linear-key.sh`: ambiente -> `.env` -> `~/.zshenv`.
+
+    **Voce nunca le o valor** — nem para conferir, nem para mostrar mascarado.
+    Para saber se esta configurado, rode `./bin/doctor.sh`, que responde sem
+    imprimir nada.
 33. Antes de declarar qualquer configuracao pronta, rode `./bin/doctor.sh`. Nao
     encerre com FALHA aberta: instalacao "quase pronta" que ninguem terminou e
     exatamente como este sistema falha em silencio.

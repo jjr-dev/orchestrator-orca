@@ -65,7 +65,39 @@ Levante com o humano, e so isto:
 - quais repositorios, e onde estao no disco
 - se o Linear tem um time so ou varios
 
-## Passo 3 — Linear
+## Passo 2b — Escolher o backend
+
+**Pergunte antes de configurar qualquer coisa**, porque a resposta decide se o
+Passo 3 acontece.
+
+> **Onde o trabalho vai ficar registrado: `linear` ou `orca`?**
+> **Recomendo: `linear`** se voce quer board visual, anexo de imagem no ticket
+> e a fila de triagem automatica a cada 2 minutos.
+> **`orca`** se quer comecar sem configurar servico nenhum: a spec, o pai/filho
+> e o status ficam no proprio Orca, e o fluxo e todo pelo chat.
+> Da para trocar depois com `/orc-backend`, mas a troca **nao migra nada**.
+
+```bash
+./bin/registry-edit.py set-backend <linear|orca>
+./bin/backend.sh --explica
+```
+
+## Passo 2c — O arquivo `.env`
+
+Crie a partir do template, se ainda nao houver:
+
+```bash
+[ -f .env ] || cp .env.example .env
+```
+
+**Voce cria; quem preenche e o humano.** No backend `orca` pode ficar vazio —
+nada le `LINEAR_API_KEY` la. No `linear`, diga para ele abrir o arquivo e
+preencher essa linha antes de seguir.
+
+## Passo 3 — Linear (so no backend `linear`)
+
+**Se o backend e `orca`, pule este passo inteiro** e diga isso no relatorio. Nao
+ha token, estado nem etiqueta para configurar.
 
 Chame `/orc-linear`. **Nao reimplemente**: token, estados e etiquetas
 tem uma implementacao so, e ela mora la.
@@ -90,15 +122,16 @@ do orquestrador. Isso vale para as sessoes que o Orca abre com
 `--workspace "path:<raiz>"`, que e o caso normal — mas nao para uma sessao
 aberta em outro diretorio, que carrega as skills e nao acha o `bin/`.
 
-Definir `ORCH_ROOT` remove a duvida. Entregue o comando para o humano rodar,
-com o caminho real resolvido:
+Definir `ORCH_ROOT` remove a duvida, e o lugar dele e o `.env` que voce criou no
+Passo 2c — a linha ja esta la, comentada como opcional:
 
-```
-! printf 'export ORCH_ROOT="%s"\n' "$(pwd)" >> ~/.zshenv
+```bash
+./bin/registry-edit.py show >/dev/null && pwd    # o valor a colar
 ```
 
-Nao e segredo, mas continua sendo o shell dele — nao escreva no lugar dele.
-Vale a mesma ressalva do token: **o Orca so enxerga depois de reiniciar.**
+Peca para o humano preencher `ORCH_ROOT=` no `.env` com esse caminho. Nao e
+segredo, mas o arquivo e dele e o padrao do projeto e um so: valor real mora no
+`.env`, nunca no `.env.example`.
 
 ## Passo 4c — Etiquetas do registry
 

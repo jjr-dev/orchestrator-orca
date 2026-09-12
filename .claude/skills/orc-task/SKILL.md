@@ -1,11 +1,11 @@
 ---
 name: orc-task
 description: |
-  Cria uma demanda nova direto do chat, sem passar pelo Linear a mao: cria o
-  ticket (ou pai + um filho por repo), aplica as etiquetas Repo/, Risk/ e
-  Stack/, redige a especificacao lendo o codigo, e **mostra o plano no chat
-  para voce aprovar antes de despachar**. Ajustes sao pedidos na mesma conversa.
-  O Linear fica com o historico inteiro.
+  Cria uma demanda nova direto do chat, sem abrir o board: grava o
+  registro (ou pai + um filho por repo), aplica Repo/, Risk/ e Stack/, redige
+  a especificacao lendo o codigo, e **mostra o plano no chat para voce aprovar
+  antes de despachar**. Ajustes sao pedidos na mesma conversa. Funciona com o
+  backend Linear ou com o Orca, sem mudar nada no seu pedido.
   Use sempre que aparecer "/orc-task", "cria uma task", "nova demanda", "manda
   fazer X no repo Y", ou quando o humano descrever no chat um trabalho novo que
   ainda nao existe como ticket.
@@ -54,7 +54,7 @@ A unica excecao e `--fast`, que existe para o trabalho obvio e pequeno: trocar
 um texto, ajustar um valor. Ali o pedido no chat ja e a aprovacao, porque nao ha
 o que ler antes.
 
-## 1. Resolva os nomes antes de tocar no Linear
+## 1. Resolva os nomes antes de gravar qualquer coisa
 
 **O humano nao precisa digitar o nome exato.** `WitePay UI`, `witepay ui` e
 `witepayui` resolvem todos para `WitePay - UI`:
@@ -65,8 +65,9 @@ o que ler antes.
 ```
 
 Saida 0 imprime a chave canonica no stdout — **use essa**, nunca o texto
-original. A partir daqui, byte a byte: e o que casa com a etiqueta `Repo/` no
-Linear, e divergir num espaco deixa o ticket invisivel.
+original. A partir daqui, byte a byte: no backend `linear` e o que casa com a
+etiqueta `Repo/`, e no `orca` e o que casa com o campo `repo` do front-matter.
+Divergir num espaco deixa o item invisivel nos dois.
 
 Saida 1 e uma de duas coisas, e o stderr diz qual:
 
@@ -77,7 +78,7 @@ Saida 1 e uma de duas coisas, e o stderr diz qual:
   o mais provavel e **pare**.
 
 🔴 **Resolva TODOS os nomes antes de criar qualquer ticket.** Meio ticket criado
-e pior que nenhum: sobra lixo no Linear que ninguem sabe de onde veio.
+e pior que nenhum: sobra lixo no board que ninguem sabe de onde veio.
 
 Com `--stack`, expanda para os membros. Some com os `--repo`, sem duplicar.
 
@@ -85,98 +86,65 @@ Todos os repos tem que ser da **mesma empresa** — `wip_max` e por empresa, e u
 demanda que atravessa duas nao tem como respeitar os dois limites. Se o pedido
 atravessar, pare e diga que precisa virar duas demandas.
 
-## 2. Crie no Linear
+## 2. Redija a especificacao ANTES de gravar qualquer coisa
 
-Use o `bin/board.sh`, **nao o `orca linear`**, para toda escrita. Ele cacheia os
-UUID de estado e etiqueta e manda tudo numa requisicao: criar um ticket com
-estado e tres etiquetas custa ~390 ms por aqui contra ~5,6 s por la, e N filhos
-saem numa chamada so.
+Esta ordem nao e preferencia: no backend `orca` a spec de uma task e **imutavel
+depois da criacao**. Se o registro nascesse antes da redacao, nao haveria como
+ajustar antes de aprovar — e ajustar antes de aprovar e o proposito do portao.
+Redigir primeiro funciona igual nos dois backends, entao e o caminho unico.
 
-**Um repo:** um ticket so, com `Repo/` e `Risk/`.
-
-```bash
-./bin/board.sh create --team <TEAM> --title "<titulo>" --body-file <arquivo> \
-  --label "<Nome do Repo>" --label "<nivel de risco>" --label "Queue Jump" \
-  --state "Drafting"
-```
-
-**Dois ou mais:** ticket pai + um filho por repo, os filhos num lote so.
-
-```bash
-# pai — sem Repo/, sem Risk/, porque ele nao e despachado
-./bin/board.sh create --team <TEAM> --title "<titulo>" --body-file <arquivo> \
-  --label "<Nome da Stack>" --state "Drafting"
-
-# filhos — uma requisicao para todos
-cat > /tmp/filhos.json <<'JSON'
-[ {"title": "<titulo A>", "body_file": "<arquivo A>",
-   "labels": ["<Repo A>", "<risco>", "Queue Jump"], "state": "Drafting"},
-  {"title": "<titulo B>", "body_file": "<arquivo B>",
-   "labels": ["<Repo B>", "<risco>", "Queue Jump"], "state": "Drafting"} ]
-JSON
-./bin/board.sh create --team <TEAM> --parent <IDENT-do-pai> --batch /tmp/filhos.json
-```
-
-**`Queue Jump` em todo filho que voce criar.** Ela e o registro, no proprio
-board, de que aquele ticket veio do chat e por isso passou na frente. Sem ela o
-furo de fila existe e nao aparece em lugar nenhum — e a classe de coisa que este
-sistema mais sofre. Ela tambem e como voce reencontra o que esta esperando
-aprovacao, no Passo 5.
-
-🔴 **`Drafting`, nunca `Draft`.** O precheck `has-triage.sh` vigia exatamente
-`Draft`, a cada 2 minutos. Ticket criado la e visivel para o cron antes de voce
-reivindicar — e o cron despacharia uma segunda triagem no mesmo ticket. O claim
-resolveria o empate, mas um dos dois dispatches teria sido desperdicado.
-
-Nascer em `Drafting` e nascer reivindicado: nenhum dos dois prechecks olha esse
-estado, entao o ticket e seu do inicio ao fim.
-
-Tres regras que vem da triagem, e valem igual aqui:
-
-- **`Repo/` e `Risk/` vao nos filhos**, nunca no pai. O pai e derivado: quem
-  define o estado dele sao os filhos, pelo `bin/sync-parent-status.sh`.
-- **Um `Repo/` por filho.** O grupo e exclusivo no Linear.
-- **`Stack/` so no pai**, e so quando o conjunto de repos casa exatamente com
-  uma stack do registry. Conjunto parcial nao leva etiqueta.
-
-O nivel de risco sai do `--risk`, se voce passou; senao do `risk_default` do
-repo no registry. **Nao invente** — se o repo nao tem `risk_default`, o
-resolvedor cai no fallback, que e o ajuste mais caro de proposito.
-
-O pai descreve o contrato entre os repos quando houver — o que a API expoe e o
-que o front consome. E o que impede os dois filhos de inventarem nomes
-diferentes para o mesmo campo.
-
-## 3. Redija a especificacao
-
-**Sem `--fast`:** invoque a skill `/orc-triage` passando os `<IDENT>` dos filhos
-que voce acabou de criar. Ela le o codigo de verdade e reescreve a descricao no
-formato executavel — escopo, fora de escopo, arquivos afetados, criterios de
-aceite e roteiro de verificacao manual.
+**Sem `--fast`:** invoque a skill `/orc-triage` no **modo sem ticket**, passando
+o pedido e o repositorio de cada filho. Ela le o codigo de verdade e devolve o
+caminho de um arquivo com a spec no formato executavel — escopo, fora de escopo,
+arquivos afetados, criterios de aceite e roteiro de verificacao manual.
 
 **Nao reimplemente a redacao aqui.** As regras dela sao maduras e moram la; duas
 copias divergem, e a que diverge e sempre a que ninguem lembra de atualizar.
 
-**Com `--fast`:** pule esta etapa, aplique a etiqueta `Fast Track` nos filhos, e
-deixe o pedido cru na descricao. Se no meio do caminho ficar claro que nao era
-trivial, o worker tem instrucao propria para parar e escrever o plano
-(worker-workflow, passo 2b).
+**Com `--fast`:** pule a redacao. O pedido cru vira o corpo, com a etiqueta
+`Fast Track`. Se no meio do caminho ficar claro que nao era trivial, o worker
+tem instrucao propria para parar e escrever o plano (worker-workflow, passo 2b).
+
+## 3. Grave o rascunho
+
+```bash
+./bin/board.sh draft --team <TEAM> --title "<titulo>" --body-file <spec> \
+  --label "<Nome do Repo>" --label "<nivel de risco>" --label "Queue Jump" \
+  [--parent <ident do pai>] [--slug <apelido curto>]
+```
+
+**Use `board.sh`, nunca `linear.sh` nem `orca-board.py`.** E o que faz esta skill
+funcionar igual nos dois backends. Onde o rascunho para depende de qual esta
+ligado, e voce nao precisa saber qual:
+
+| backend | onde o rascunho fica | por que ali |
+|---|---|---|
+| `linear` | ticket em `Drafted` | nenhum cron vigia esse estado |
+| `orca` | arquivo em `state/drafts/` | a spec da task e imutavel; o arquivo nao |
+
+**Dois ou mais repos:** grave o pai primeiro, depois um filho por repo passando
+`--parent`. O pai leva `Stack/` e nao leva `Repo/` nem `Risk/` — ele nao e
+despachado, e quem define o estado dele sao os filhos.
+
+**`Queue Jump` em todo filho.** Ela e o registro de que aquele ticket veio do
+chat e por isso passou na frente. Sem ela o furo de fila existe e nao aparece em
+lugar nenhum. Ela tambem e como voce reencontra o que espera aprovacao.
+
+Tres regras que vem da triagem, e valem igual aqui:
+
+- **`Repo/` e `Risk/` vao nos filhos**, nunca no pai.
+- **Um `Repo/` por filho.** No Linear o grupo e exclusivo; no Orca o
+  front-matter so tem um campo `repo`.
+- **`Stack/` so no pai**, e so quando o conjunto de repos casa exatamente com
+  uma stack do registry. Conjunto parcial nao leva etiqueta.
+
+O nivel de risco sai do `--risk`, se voce passou; senao do `risk_default` do
+repo no registry. **Nao invente** — sem `risk_default`, o resolvedor cai no
+fallback, que e o ajuste mais caro de proposito.
 
 ## 4. Mostre e PARE
 
-Mova tudo para `Drafted` e **encerre o turno**.
-
-```bash
-./bin/board.sh move --to "Drafted" <IDENT-do-pai> <IDENT-filho-1> <IDENT-filho-2>
-```
-
-**Por que `Drafted` e o lugar certo para esperar:** nenhum precheck olha esse
-estado — o `has-triage.sh` vigia `Draft` e o `has-ready.sh` vigia
-`Ready for Agent`. O `/orc-reconcile` tambem nao mexe nele; ele destrava
-`Drafting`, que e outro estado. Entao o ticket fica parado ali o tempo que voce
-precisar, sem nenhum cron pegando pelas costas.
-
-Imprima no chat, com a spec inteira de cada filho:
+Imprima no chat a arvore e a spec inteira de cada filho:
 
 ```
 ACME-201  Checkout recorrente                    (pai, Stack/Acme - API/Web)
@@ -190,59 +158,52 @@ ACME-202 — <titulo>
   Criterios:         <...>
   Perguntas:         <cada uma com a recomendacao ao lado>
 
-ACME-203 — <...>
-
 Nada foi despachado. Diga "pode executar" para eu subir os workers,
 ou peca os ajustes aqui mesmo.
 ```
 
 Transcreva tambem o motivo do roteamento de modelo, que sai no stderr do
-`implementer-model.sh` — e o que deixa voce ver um `Risk/` errado antes de gastar
-um worker.
+`implementer-model.sh` — e o que deixa voce ver um `Risk/` errado antes de
+gastar um worker.
 
 🔴 **Termine o turno aqui.** Nao crie worktree, nao chame `worker-start`, nao
 "adiante" nada. O portao e o produto deste passo.
 
 ### Se o humano pedir ajuste
 
-Reescreva a spec e **mostre de novo**, sem sair de `Drafted`:
-
-```bash
-./bin/board.sh update --body-file <spec revisada> <IDENT>
-```
-
-Diga em uma linha o que mudou desde a versao anterior, para ele nao reler tudo.
-Depois pare de novo. Quantas voltas forem necessarias — o portao so abre com um
+Regrave o rascunho com **o mesmo `--slug`** (ou o mesmo IDENT, no Linear) e
+mostre de novo. Diga em uma linha o que mudou, para ele nao reler tudo. Depois
+pare de novo. Quantas voltas forem necessarias: o portao so abre com um
 "pode executar".
 
-Ajuste que muda o conjunto de repos volta ao Passo 1: resolver nome, criar ou
-apagar filho. Nao remende com etiqueta.
+Ajuste que muda o conjunto de repos volta ao Passo 1. Nao remende com etiqueta.
 
-## 5. Aprovado: claim e despacho
+## 5. Aprovado: promova e despache
 
-Chegou aqui quando o humano aprovou, ou quando ele chamou `/orc-task --go`.
+Chegou aqui quando o humano aprovou, ou chamou `/orc-task --go`.
 
-**Quais tickets.** Na mesma conversa voce ja sabe os IDENT. Em conversa nova,
-ache os que estao esperando:
+**Quais.** Na mesma conversa voce ja sabe. Em conversa nova, pergunte ao board:
 
 ```bash
-./bin/linear-query.sh '{ issues(filter:{
-  team:{ key:{ eq:"<TEAM>" } },
-  state:{ name:{ eq:"Drafted" } },
-  labels:{ name:{ eq:"Queue Jump" } }
-}, first:50){ nodes{ identifier title parent{ identifier } } } }'
+./bin/board.sh list-drafts --team <TEAM>
 ```
 
-Se vier mais de uma demanda, **liste e pergunte qual** antes de despachar. Nunca
-despache tudo que aparecer: `Queue Jump` em `Drafted` pode ter sobrado de uma
-conversa anterior que o humano nunca aprovou.
+A saida tem o mesmo formato nos dois backends: `identifier`, `title`, `repo`,
+`risk`, `stack`, `parent`, `queue_jump`, `fast`.
 
-Mova para `Scheduled` **antes** de criar worktree. A ordem nao e estetica: o
-estado e o unico registro de que alguem pegou o ticket, e inverter abre janela
-para o `/orc-dispatch` despachar o mesmo ticket de novo.
+Se vier mais de uma demanda, **liste e pergunte qual**. Nunca promova tudo que
+aparecer: rascunho pode ter sobrado de uma conversa que o humano nunca aprovou.
 
 ```bash
-./bin/board.sh move --to "Scheduled" <IDENT-filho-1> <IDENT-filho-2>
+./bin/board.sh promote --team <TEAM> <ident-filho-1> <ident-filho-2>
+```
+
+No backend `linear` isso move de `Drafted` para `Scheduled`. No `orca`, cria a
+task ja na fila `ready`. Nos dois casos o item passa a ser seu, e so entao vem a
+worktree — inverter a ordem abre janela para o `/orc-dispatch` pegar o mesmo
+item de novo.
+
+```bash
 ./bin/resume-target.sh <IDENT>     # sempre FRESH aqui, mas confirme
 ```
 
@@ -267,10 +228,9 @@ diferentes: o da empresa e justica, e voce tem licenca para furar; o global e a
 **maquina**, porque cada worker e uma sessao completa do Claude Code. Furar o
 global derruba tudo no meio, e voce perde o seu pedido junto com os alheios.
 
-Se o global nao comportar a demanda inteira, despache o que couber e **deixe o
-resto em `Ready for Agent`**, dizendo quais ficaram. Esse e o unico momento em
-que voce usa esse estado, e o uso e deliberado: e o que o `has-ready.sh` vigia,
-entao o cron pega no proximo ciclo sozinho. Ticket que sobra nao fica orfao.
+Se o global nao comportar a demanda inteira, promova o que couber e **deixe o
+resto como rascunho**, dizendo quais ficaram. Eles nao se perdem: continuam
+aparecendo no `list-drafts`, e a proxima passagem promove.
 
 ## 6. Feche
 
@@ -295,14 +255,16 @@ E diga, em ate cinco linhas, o que subiu e com qual modelo.
 
 ## Quando algo falhar no meio
 
-Se a criacao no Linear funcionou e o despacho falhou, **nao apague o ticket**.
-Deixe em `Ready for Agent` e diga isso no relatorio: o `/orc-dispatch` pega no
-proximo ciclo, e o trabalho de redacao nao se perde.
+Se a promocao funcionou e o despacho falhou, **nao apague nada**. Diga no
+relatorio o que ficou promovido sem worker: no backend `linear` o
+`/orc-dispatch` pega no proximo ciclo, e no `orca` o item fica na fila `ready`,
+que o `has-ready.sh` enxerga. O trabalho de redacao nao se perde.
 
-Se a criacao do pai funcionou e a de um filho falhou, crie o filho que falta
-antes de despachar qualquer um. Pai com filho faltando produz um
+Se o rascunho do pai funcionou e o de um filho falhou, grave o filho que falta
+antes de promover qualquer um. Pai com filho faltando produz um
 `sync-parent-status` que nunca fecha.
 
-Se a sessao morrer entre o Passo 4 e o Passo 5, nada se perde: os tickets ficam
-em `Drafted` esperando, e a proxima conversa os reencontra pela consulta do
-Passo 5. Nenhum cron os toca nesse meio tempo.
+Se a sessao morrer entre o Passo 4 e o Passo 5, nada se perde. Os rascunhos
+continuam onde estao — ticket em `Drafted` ou arquivo em `state/drafts/` — e a
+proxima conversa os reencontra com `board.sh list-drafts`. Nenhum cron toca
+neles nesse meio tempo, nos dois backends.

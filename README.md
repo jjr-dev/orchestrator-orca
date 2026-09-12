@@ -1,8 +1,19 @@
-# Orquestrador multi-projeto — Claude Code + Orca + Linear
+# Orquestrador multi-projeto — Claude Code + Orca
 
-Um painel que lê tickets do Linear, despacha agentes autônomos do Claude Code em
-worktrees isolados de vários repositórios, e devolve pull requests. Você escreve
-a ideia no celular; o PR aparece.
+Um painel que despacha agentes autônomos do Claude Code em worktrees isolados de
+vários repositórios e devolve pull requests. Você escreve a ideia no celular ou
+no chat; o PR aparece.
+
+Onde o trabalho fica registrado é **escolha sua**, feita na instalação e
+reversível depois:
+
+- **`linear`** — ticket, board, etiquetas e cronjobs vigiando as colunas. Exige
+  um token do Linear.
+- **`orca`** — o próprio Orca guarda a spec, o pai/filho e o status. Sem token,
+  sem serviço externo, tudo pelo chat.
+
+O resto do sistema não muda. As mesmas skills, os mesmos comandos, o mesmo
+worker.
 
 Este repositório é só o **painel de controle**: ele coordena o trabalho, mas o
 código dos seus projetos continua nos repositórios deles. Nada é clonado para
@@ -11,8 +22,11 @@ cá, e o merge nunca é automático — essa decisão continua sua.
 ```
 registry.yaml          SUA configuração (ignorada pelo git)
 registry.example.yaml  o template versionado, comentado campo a campo
+.env                   suas chaves (ignorado pelo git)
+.env.example           o template das chaves, versionado e sem valor real
 CLAUDE.md              as regras que o coordenador segue
 bin/                   diagnóstico, edição do registry, prechecks dos cronjobs
+bin/board.sh           a porta única para registrar trabalho (resolve o backend)
 .claude/skills/        as operacionais e as seis de configuração
 .claude/agents/        subagentes de planejamento e review
 automations/           criação dos cronjobs do Orca
@@ -90,7 +104,18 @@ python3 -m pip install pyyaml
 gh auth login
 ```
 
-## Passo 2 — Duas decisoes antes de instalar
+## Passo 2 — Três decisões antes de instalar
+
+**Onde o trabalho vai ficar registrado: `linear` ou `orca`.** É a primeira
+pergunta do `/orc-setup`. A tabela em [Escolher o backend](#escolher-o-backend)
+compara as duas. Em resumo: escolha `linear` se quer board visual, anexo de
+imagem no ticket e a fila de triagem automática; escolha `orca` se quer começar
+sem configurar serviço nenhum e trabalhar pelo chat.
+
+Dá para trocar depois, mas a troca **não migra nada**, então decidir agora
+poupa retrabalho.
+
+As duas decisões abaixo só valem se você escolheu `linear`.
 
 **Um workspace, um time no Linear.** Não crie um time por projeto. No Linear os
 estados de workflow são por time: com três times você definiria os nove estados
@@ -100,7 +125,7 @@ feita pela etiqueta `Repo/`.
 
 **Quais repositórios entram, e de qual branch saem as features.** Tenha a lista
 com o caminho local de cada um. Se algum repo tem `main` e `develop`, saiba qual
-e — errar faz todo worker daquele repo partir de código velho, e nada acusa.
+é — errar faz todo worker daquele repo partir de código velho, e nada acusa.
 
 ## Passo 3 — Clonar e abrir
 
@@ -121,32 +146,51 @@ verifica. Rodar de novo só completa o que faltou — nunca refaz o que existe.
 
 | Etapa | O que acontece |
 |---|---|
-| diagnóstico | `bin/doctor.sh` diz o que já existe é o que falta |
+| diagnóstico | `bin/doctor.sh` diz o que já existe e o que falta |
 | registry | copia `registry.example.yaml` para `registry.yaml` se ainda não houver |
-| Linear | chama `/orc-linear`: token, 9 estados, grupos de etiqueta |
+| **backend** | **pergunta `linear` ou `orca` e grava em `defaults.backend`** |
+| **`.env`** | **copia `.env.example` para `.env` se não houver, e pede para você preencher** |
+| Linear | só no backend `linear`: chama `/orc-linear` para token, 9 estados e grupos de etiqueta |
 | repos | chama `/orc-repo-add` para cada um: Orca + etiqueta + registry |
 | subagentes | `bin/install-agents.sh` copia para `~/.claude/agents/` |
 | teste manual | roda os prechecks e um despacho de verdade, antes de qualquer cron |
 | cronjobs | lê `orca automations create --help` e cria as três automations |
 | checklist | lista o que só você consegue fazer no app |
 
-### O token do Linear
+### O arquivo `.env` e o token do Linear
 
-**A skill nunca pede seu token é nunca o grava.** Quando falta, ela te entrega
-um comando para você mesmo rodar — o `!` no início executa na sua sessão:
+Toda configuração que não cabe no `registry.yaml` mora num `.env`. O template
+versionado é o `.env.example`; o `.env` em si é ignorado pelo git.
+
+```bash
+cp .env.example .env
+```
+
+O `/orc-setup` faz essa cópia sozinho quando o arquivo não existe. **Ele cria;
+quem preenche é você.**
 
 ```
-! umask 077 && printf 'export LINEAR_API_KEY="COLE_AQUI"\n' >> ~/.zshenv && chmod 600 ~/.zshenv
+LINEAR_API_KEY=      # obrigatório só no backend `linear`
+ORCH_ASSETS_ROOT=    # opcional: onde os anexos baixados ficam
+ORCH_ROOT=           # opcional: para rodar as skills de outro diretório
 ```
 
 O token sai de *Linear → Settings → Security & access → Personal API keys*.
+No backend `orca`, deixe a linha vazia: nada lê essa variável lá.
+
+**Nenhuma skill pede, lê ou grava o seu token.** Se ele faltar, elas mandam você
+preencher o arquivo e param. Para saber se está configurado sem imprimir nada,
+use `./bin/doctor.sh`.
 
 Três detalhes que já custaram tempo:
 
-- **`~/.zshenv`, não `.zshrc`.** O `.zshrc` só é lido por shell interativo, e os
-  prechecks do cron rodam em shell não interativo.
-- **Reinicie o Orca depois de criar a chave.** Ele é app de GUI e herda o
-  ambiente do launchd de quando abriu; chave criada depois não chega nele.
+- **Arquivo, não variável de ambiente.** Até 12/09 o caminho era gravar em
+  `~/.zshenv` ou usar `launchctl setenv`. Os dois falham igual: os prechecks do
+  cron rodam como filhos do app do Orca, que só herda o ambiente existente
+  quando o app subiu, e `launchctl setenv` não sobrevive a reboot. O sintoma era
+  o precheck sair 4 e a automation nunca disparar, em silêncio.
+- **O `~/.zshenv` continua funcionando**, lido em último lugar, para não quebrar
+  instalações antigas. A ordem é ambiente, depois `.env`, depois `~/.zshenv`.
 - **Se você colar o token no chat, ele vazou** para o transcript. Revogue e gere
   outro.
 
@@ -254,6 +298,192 @@ configuração num bug intermitente que dispara a cada 2 minutos.
 
 Sai `0` se tudo passou, `1` se ha falha, `2` se ha só avisos. **Não considere a
 instalação pronta com FALHA aberta.**
+
+---
+
+# Escolher o backend
+
+Onde o orquestrador registra o trabalho. Mora em `defaults.backend`, no
+`registry.yaml`, e vale para o sistema inteiro: skills, prechecks dos cronjobs e
+diagnóstico leem essa mesma chave.
+
+```bash
+./bin/backend.sh --explica     # qual está ativo, e o que isso implica
+```
+
+## As duas opções, lado a lado
+
+| | `linear` | `orca` |
+|---|---|---|
+| onde mora a spec | ticket do Linear | task do Orca |
+| `Repo/`, `Risk/`, `Stack/` | etiquetas de verdade | bloco no topo da spec |
+| estados | os 9 do workflow | 5 (`pending` `ready` `blocked` `dispatched` `completed`) |
+| aprovação pelo chat | ticket parado em `Drafted` | rascunho em `state/drafts/` |
+| triagem automática a cada 2 min | sim | **não** — não há coluna para largar pedido |
+| execução automática a cada 2 min | sim | sim, via `task-list --ready` |
+| board visual | sim | `orca orchestration task-list` |
+| imagem no ticket | baixa do Linear e entrega ao agente | caminho local passado no chat |
+| comentário por ticket | sim | não — plano fica no `PLAN.md`, veredito no PR |
+| token / serviço externo | **exige** | não exige |
+| histórico | no servidor do Linear | local, nesta máquina |
+
+**Escolha `linear` se** você quer o quadro visual, quer largar pedido numa
+coluna e ter o agente redigindo sozinho em dois minutos, ou precisa que outra
+pessoa veja o andamento sem acesso à sua máquina.
+
+**Escolha `orca` se** você quer começar sem configurar serviço nenhum, trabalha
+sozinho, e o chat já é onde você pede as coisas.
+
+## Trocar depois
+
+```
+/orc-backend
+```
+
+A skill mostra o estado atual, explica o que muda e conduz a troca. Por baixo
+ela chama a porta única de escrita do registry, que prova que só
+`defaults.backend` mudou:
+
+```bash
+./bin/registry-edit.py set-backend orca      # ou linear
+```
+
+Não edite o YAML à mão para isso. O valor é lido por scripts que rodam sem
+sessão nenhuma aberta, e um erro de digitação para a fila em silêncio.
+
+## 🔴 A troca não migra nada
+
+O que já existe fica onde nasceu. Ticket no Linear continua no Linear; task no
+Orca continua no Orca. Não há importação, e inventar uma seria pior: duplicaria
+o registro de execução sem nenhuma forma de saber qual dos dois é verdade.
+
+**Termine o que está em andamento antes de trocar.** Worker no ar reporta para o
+backend em que nasceu. Depois da troca ninguém olha mais para lá, então o
+trabalho não se perde, mas some da sua vista.
+
+Ao sair do Linear, o token **pode ficar onde está**. Nada mais o lê, e apagar é
+irreversível por nenhum ganho.
+
+## Depois de trocar
+
+**Para `orca`:** rode `./bin/doctor.sh`, que passa a checar o Orca e pula as
+verificações do Linear sozinho. Desabilite a automation de triagem: o precheck
+já sai 1 e ela nunca acorda, mas deixá-la habilitada é configuração que mente.
+
+**Para `linear`:** rode `/orc-linear` se o token nunca foi configurado nesta
+máquina, depois `/orc-sync` para criar estados e etiquetas que faltem, e
+`./bin/doctor.sh` para confirmar. Reabilite a automation de triagem.
+
+## Como os prechecks sabem
+
+Os cronjobs consultam um precheck barato antes de acordar qualquer agente, e
+esse precheck resolve o backend sozinho — ele roda sem sessão aberta, então não
+pode perguntar a ninguém.
+
+```bash
+./bin/has-ready.sh <TEAM>     # backend linear: consulta "Ready for Agent"
+                              # backend orca:   consulta task-list --ready
+```
+
+Quando o registry está ausente, ilegível ou com valor desconhecido, eles saem
+com **código 6**, nunca 1. A diferença importa: 1 significa "fila vazia" e 6
+significa "não sei ler a configuração". Colapsar os dois esconderia um registry
+quebrado como se fosse um dia sem trabalho.
+
+---
+
+# Os comandos
+
+Todos começam com `/orc-`. A lista viva é `/orc-help`, que a lê do disco — se
+você criar uma skill nova, ela aparece lá sozinha.
+
+## Dia a dia
+
+**`/orc-task "<pedido>" --repo "<Nome>"`**
+Começa uma demanda nova pelo chat. Resolve o nome do repositório, redige a
+especificação lendo o código, mostra tudo e **para**. Só despacha quando você
+aprova. Aceita vários `--repo`, ou um `--stack`. Com `--fast` pula a redação e o
+portão, para o que é obviamente pequeno.
+
+**`/orc-triage`**
+Lê o código de verdade e reescreve a descrição de um ticket em `Draft` no
+formato executável: escopo, fora de escopo, arquivos afetados, critérios de
+aceite e roteiro de verificação manual. No backend `linear` roda sozinha a cada
+dois minutos; no `orca` é chamada pela `/orc-task`.
+
+**`/orc-dispatch`**
+Puxa o que está pronto para execução, confere capacidade, cria o worktree e sobe
+o worker. É o que os cronjobs chamam.
+
+**`/orc-adjust "<o que mudar>"`**
+Pede ajuste no que já virou pull request, sem abrir ticket novo. Reaproveita a
+mesma branch e o mesmo PR.
+
+**`/orc-project`**
+Monta o grafo de ondas de um projeto: o que pode sair junto, o que depende de
+quê, e em que ordem despachar.
+
+**`/orc-reconcile`**
+Destrava item órfão e limpa worktree morto. Rode quando algo ficou parado sem
+explicação.
+
+## Configuração
+
+**`/orc-setup`**
+Instala do zero, ou completa o que falta. Diagnostica, mostra **um** plano, pede
+**uma** confirmação, executa e verifica. Rodar de novo nunca refaz o que existe.
+
+**`/orc-backend`**
+Escolhe onde o trabalho é registrado: `linear` ou `orca`. Mostra o estado atual,
+explica o que muda e conduz a troca. Veja
+[Escolher o backend](#escolher-o-backend).
+
+**`/orc-linear`**
+Só no backend `linear`: configura o token, os nove estados do workflow e os
+grupos de etiqueta. Nunca pede nem grava o seu token — ela te entrega o comando
+para você mesmo rodar.
+
+**`/orc-repo-add "<Nome do Repo>"`**
+Acrescenta um repositório em todas as pontas de uma vez: registra no Orca, cria
+a etiqueta correspondente e escreve no `registry.yaml`.
+
+**`/orc-sync`**
+Reconcilia as três pontas — registry, backend e Orca — e cria o que estiver
+faltando. Nunca apaga nada.
+
+**`/orc-models`**
+Mostra e ajusta qual modelo e qual `effort` cada etapa usa. O roteamento é por
+nível de risco do item.
+
+**`/orc-doctor`**
+Verifica se tudo está **realmente** ligado, não apenas configurado. Roda
+quarenta e poucas checagens executáveis e adapta o que checa ao backend ativo.
+É o comando a rodar quando algo parece errado e você não sabe por onde começar.
+
+**`/orc-help`**
+Esta referência, sempre atualizada, direto do disco.
+
+## Sem passar por skill
+
+```bash
+./bin/doctor.sh                              diagnóstico completo
+./bin/backend.sh --explica                   qual backend está ativo
+./bin/board.sh list-drafts --team <TEAM>     o que espera sua aprovação
+./bin/registry-edit.py show                  o registry, legível
+./bin/resolve-name.sh --repo "<texto>"       nome aproximado para chave canônica
+./bin/implementer-model.sh <IDENT> --flags   qual modelo aquele item usaria
+./bin/cleanup-worktrees.sh                   worktrees que já podem sair
+```
+
+## O kill switch
+
+```bash
+touch PAUSE    # para tudo, sem desabilitar automation nenhuma
+rm PAUSE       # volta
+```
+
+Os prechecks conferem esse arquivo antes de qualquer outra coisa, nos dois
+backends.
 
 ---
 

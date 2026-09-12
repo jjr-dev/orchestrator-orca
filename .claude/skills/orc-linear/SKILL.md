@@ -28,9 +28,9 @@ mas nao acha o `bin/` — e a falha aparece no meio do trabalho, nao no comeco.
 
 ## 1. O token — voce nunca o digita para mim
 
-**Nao peca o token, nao aceite se for colado, e nao escreva em arquivo nenhum.**
-Se o usuario colar um token no chat, avise que ele acabou de vazar para o
-transcript e que o certo e revoga-lo e gerar outro.
+**Nao peca o token, nao aceite se for colado, e nao escreva o valor em arquivo
+nenhum.** Se o usuario colar um token no chat, avise que ele acabou de vazar
+para o transcript e que o certo e revoga-lo e gerar outro.
 
 Primeiro veja se ja existe:
 
@@ -40,23 +40,32 @@ Primeiro veja se ja existe:
 
 Se responder com um nome, o token existe e funciona — pule para a etapa 2.
 
-Se falhar, entregue **este comando para o humano rodar**, explicando que o `!`
-no inicio da linha executa na sessao dele:
+Se falhar, o caminho e **um arquivo que o humano preenche**, nao um comando que
+voce monta. Crie o `.env` a partir do template, se ainda nao houver:
 
+```bash
+[ -f .env ] || cp .env.example .env
 ```
-! umask 077 && printf 'export LINEAR_API_KEY="COLE_AQUI"\n' >> ~/.zshenv && chmod 600 ~/.zshenv
-```
 
-O token sai de *Linear → Settings → Security & access → Personal API keys*.
+E entao peca para ele abrir o `.env` e preencher a linha `LINEAR_API_KEY=`. O
+token sai de *Linear → Settings → Security & access → Personal API keys*.
 
-Tres coisas para dizer junto, porque cada uma ja custou tempo:
+**Voce cria o arquivo vazio; quem escreve o valor e ele.** O `.env` esta no
+`.gitignore`; o `.env.example` e versionado e nunca leva valor real.
 
-- **`~/.zshenv`, nao `.zshrc`.** O `.zshrc` so e lido por shell interativo, e os
-  prechecks do cron rodam em shell nao interativo.
-- **O Orca nao vai enxergar a chave ate ser reiniciado.** Ele e app de GUI e
-  herda o ambiente do launchd de quando abriu. O `bin/linear-key.sh` contorna
-  lendo o arquivo direto, mas so scripts nossos passam por ele.
-- Depois que o humano rodar, valide de novo antes de seguir.
+Por que arquivo e nao variavel de ambiente: ate 12/09 esta skill entregava um
+comando que gravava em `~/.zshenv`. Os prechecks do cron rodam como filhos do
+app do Orca, que so herda o ambiente existente quando o app subiu — e
+`launchctl setenv` nao sobrevive a reboot. O sintoma era o precheck sair 4 e a
+automation nunca disparar, em silencio. Arquivo no disco nao depende de ordem
+de inicializacao, e e obvio onde olhar quando falha.
+
+O `~/.zshenv` continua sendo lido em ultimo lugar, para nao quebrar quem ja
+tinha. A ordem esta no `bin/linear-key.sh`: ambiente → `.env` → `~/.zshenv`.
+
+Depois que ele preencher, valide de novo antes de seguir. **Nunca leia nem
+mostre o valor**, nem mascarado — `./bin/doctor.sh` responde se esta configurado
+sem imprimir nada.
 
 ## 2. Descobrir o time
 

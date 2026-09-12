@@ -192,6 +192,8 @@ def aplicar_estado(task_id, nome):
 
 def cmd_move(a):
     notas = [aplicar_estado(acha(i)["id"], a.to) for i in a.idents]
+    for n in notas:
+        print(f"board(orca): {n}", file=sys.stderr)
     return {"moved": a.idents, "to": a.to, "notas": notas}
 
 
@@ -226,6 +228,7 @@ def cmd_draft(a):
             campos["repo"] = l
     if a.parent:
         campos["parent"] = a.parent
+    campos["title"] = a.title
 
     slug = a.slug or re.sub(r"[^a-z0-9]+", "-", a.title.lower()).strip("-")[:60]
     caminho = os.path.join(dir_rascunhos(), f"{slug}.md")
@@ -243,6 +246,7 @@ def cmd_list_drafts(a):
         f = ler_front(open(caminho).read())
         saida.append({
             "identifier": nome[:-3], "arquivo": caminho,
+            "title": f.get("title"),
             "repo": f.get("repo"), "risk": f.get("risk"), "stack": f.get("stack"),
             "parent": f.get("parent"),
             "queue_jump": f.get("queue-jump") == "1", "fast": f.get("fast") == "1",
@@ -260,7 +264,10 @@ def cmd_promote(a):
             raise Falha(f"rascunho '{slug}' nao existe em {dir_rascunhos()}")
         spec = open(caminho).read()
         f = ler_front(spec)
-        titulo = a.title or next(
+        # O titulo veio do front-matter, gravado no draft. O primeiro "# " da
+        # spec so entra como ultimo recurso: dois filhos com a mesma estrutura
+        # de secoes dariam duas tasks com o mesmo nome.
+        titulo = a.title or f.get("title") or next(
             (l.lstrip("# ").strip() for l in spec.split("\n") if l.startswith("#")), slug)
 
         args = ["task-create", "--task-title", titulo, "--display-name", titulo, "--spec", spec]
