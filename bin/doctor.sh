@@ -328,6 +328,25 @@ else
   ok "as skills passam todas pelo bin/board.sh"
 fi
 
+# O prompt de subagente virou script em 12/09. Se o worker voltar a redigir a
+# mao, volta a custar 69 s por ticket e volta a variar entre execucoes — e nada
+# no fluxo acusa, porque o prompt escrito a mao tambem funciona.
+for p in bin/subagent-prompt.sh bin/subagent-prompt.py; do
+  [ -x "$p" ] && ok "$p executavel" || falha "$p ausente ou sem +x" "o worker volta a redigir o prompt a mao"
+done
+if grep -q 'subagent-prompt.sh planner' .claude/worker-workflow.md \
+   && grep -q 'subagent-prompt.sh reviewer' .claude/worker-workflow.md; then
+  ok "worker-workflow manda gerar os dois prompts por script"
+else
+  falha "worker-workflow nao usa subagent-prompt.sh" "o worker redige a mao: +69 s por ticket"
+fi
+
+# Substituicao de comando trava o classificador de permissao: medido em 54 s
+# ate ser negada, no JJR-294.
+SUBST=$(grep -n 'gh .*\$(' .claude/worker-workflow.md | wc -l | tr -d ' ')
+[ "$SUBST" -eq 0 ] && ok "nenhum comando gh com \$( ) no workflow" \
+  || aviso "$SUBST comando(s) gh com \$( ) no workflow" "o classificador bloqueia e custa ~54 s cada"
+
 VELHO=$(find state -name 'triage.lock' -mmin +10 2>/dev/null)
 [ -n "$VELHO" ] && aviso "state/triage.lock parado ha mais de 10 min" "TTL e 180s; e lixo, pode apagar" \
                 || ok "sem lock de triagem esquecido"

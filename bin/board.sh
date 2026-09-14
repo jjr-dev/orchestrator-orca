@@ -74,6 +74,22 @@ print(json.dumps({'drafts':[{
     exec "$DIR/linear.sh" move --to "Scheduled" "${ARGS[@]}"
     ;;
 
+  show)
+    # No linear o equivalente ja existe e devolve tudo; so normalizamos a forma
+    # para o chamador nao precisar saber qual backend respondeu.
+    ARGS=(); for a in "$@"; do case "$a" in --team) SKIP=1 ;; *)
+      [ "${SKIP:-}" = 1 ] && SKIP= || ARGS+=("$a") ;; esac; done
+    orca linear issue "${ARGS[0]}" --json | python3 -c "
+import json,sys
+d=json.load(sys.stdin).get('result') or {}
+i=d.get('issue') or d
+print(json.dumps({'issue':{
+  'identifier': i.get('identifier'), 'title': i.get('title'),
+  'spec': i.get('description') or '', 'origem': 'linear',
+  'labels': [l.get('name') for l in (i.get('labels') or []) if isinstance(l,dict)],
+}}, indent=2, ensure_ascii=False))"
+    ;;
+
   create|move|update|comment|label)
     exec "$DIR/linear.sh" "$VERBO" "$@"
     ;;
@@ -90,6 +106,6 @@ print(json.dumps({'drafts':[{
 
   *)
     echo "board: verbo '$VERBO' desconhecido" >&2
-    echo "  existem: draft list-drafts promote create move update comment label list backend" >&2
+    echo "  existem: draft list-drafts promote create move update comment label show list backend" >&2
     exit 2 ;;
 esac

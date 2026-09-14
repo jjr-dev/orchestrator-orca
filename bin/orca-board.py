@@ -318,7 +318,14 @@ def montar_prompt(spec, campos):
         ]
         linhas += [f"- `{c}`" for c in manual] or ["- (nenhum comando declarado)"]
     linhas += ["", "---", "", "# Especificacao (inline, autocontida)", ""]
-    return "\n".join(linhas) + "\n" + FRONT.sub("", spec).lstrip()
+
+    # O front-matter fica NO TOPO do resultado, nao e descartado. Ele e um
+    # comentario HTML, invisivel no markdown renderizado, e o worker o ignora —
+    # mas o `implementer-model.sh` le `risk=` dali para escolher o effort. Ao
+    # remove-lo, todo ticket caia no fallback opus/xhigh sem erro nenhum.
+    fm = FRONT.search(spec)
+    cabeca = (fm.group(0) + "\n\n") if fm else ""
+    return cabeca + "\n".join(linhas) + "\n" + FRONT.sub("", spec).lstrip()
 
 
 def cmd_promote(a):
@@ -390,6 +397,31 @@ def cmd_label(a):
     return {"labeled": [], "ignorado": a.idents, "motivo": "front-matter e imutavel"}
 
 
+def cmd_show(a):
+    """Um item, COM a spec. O `list` nao devolve spec de proposito — cinquenta
+    specs numa listagem seria ilegivel — mas quem monta prompt de subagente
+    precisa dela inteira."""
+    slug = a.ident
+    caminho = os.path.join(dir_rascunhos(), f"{slug}.md")
+    if os.path.exists(caminho):
+        spec = open(caminho).read()
+        f = ler_front(spec)
+        return {"issue": {
+            "identifier": slug, "title": f.get("title") or slug,
+            "spec": FRONT.sub("", spec).lstrip(), "origem": "rascunho",
+            "repo": f.get("repo"), "risk": f.get("risk"), "stack": f.get("stack"),
+            "parent": f.get("parent"),
+        }}
+    t = acha(slug)
+    f = ler_front(t.get("spec"))
+    return {"issue": {
+        "identifier": t["id"], "title": t.get("task_title"),
+        "spec": t.get("spec") or "", "origem": "task", "status": t["status"],
+        "repo": f.get("repo"), "risk": f.get("risk"), "stack": f.get("stack"),
+        "parent": t.get("parent_id"),
+    }}
+
+
 def cmd_list(a):
     saida = []
     abertos = {g["task_id"] for g in orca("gate-list")["gates"] if g["status"] == "pending"}
@@ -447,6 +479,9 @@ def main():
 
     pr = sub.add_parser("promote"); pr.add_argument("--title"); pr.add_argument("--team")
     pr.add_argument("idents", nargs="+"); pr.set_defaults(fn=cmd_promote)
+
+    sh = sub.add_parser("show"); sh.add_argument("--team")
+    sh.add_argument("ident"); sh.set_defaults(fn=cmd_show)
 
     s = sub.add_parser("list"); s.add_argument("--team"); s.add_argument("--state")
     s.set_defaults(fn=cmd_list)

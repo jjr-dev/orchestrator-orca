@@ -157,70 +157,65 @@ Se houver conflito no merge e voce nao souber resolver com seguranca, pare,
 comente no ticket e reporte `worker_done --outcome failed`. Nao invente
 resolucao em codigo que voce nao escreveu.
 
-### 1. Mova o ticket para `In Progress`
+### 1. Despache o planner ANTES de qualquer burocracia
 
-```bash
-<ORCH_ROOT>/bin/board.sh move --to "In Progress" <IDENT>
-```
+O planner e o caminho critico: ele e uma sessao inteira lendo o codigo, e nada
+seu acontece enquanto ele nao entrega o `PLAN.md`. Tudo que nao bloqueia ele vai
+DEPOIS. Medido no JJR-294 (12/09): mover estado, espelhar metadata e escrever o
+exclude custavam 23 s rodando antes do despacho, puramente em serie.
 
-### 1b. Se o ticket tem imagem, abra antes de planejar
-
-O prompt avisa quando ha anexo. Se avisar:
-
-```bash
-<ORCH_ROOT>/bin/linear-assets.sh <IDENT>
-```
-
-Ele imprime o caminho local de cada arquivo. **Abra cada imagem com o Read
-antes de escrever o plano.** Screenshot de bug e mockup de tela mudam o que voce
-vai construir; planejar so pelo texto produz codigo que resolve outra coisa.
-
-Nao tente abrir a URL `uploads.linear.app` direto: ela devolve 401 sem a chave
-da API, e o `WebFetch` nao le imagem nem quando a URL abre.
-
-Os arquivos ficam **fora do worktree**, num diretorio que o proprio script
-resolve. Nao copie para dentro dele: fora do repositorio nao existe risco de
-entrarem no commit, e nao ha nada para apagar depois.
-
-Se o script parar com `volume nao esta montado`, o destino configurado em
-`defaults.assets_root` esta indisponivel. Nao improvise: comente no ticket que
-nao conseguiu ver o anexo e siga com o texto, dizendo isso no corpo do PR.
-
-Depois de mover, espelhe o estado no worktree — e o que faz o painel do Orca
-mostrar em que pe esta cada aba:
-
-```bash
-<ORCH_ROOT>/bin/sync-worktree-meta.sh <IDENT>
-```
-
-Rode de novo depois de cada mudanca de estado sua (passo 7, e o 2b se ocorrer).
-
-### 2. Escreva o plano em `PLAN.md`, antes de editar codigo
-
-Garanta primeiro que ele nunca sera versionado:
+**1a. Garanta que o `PLAN.md` nunca sera versionado.** Isto fica antes porque o
+planner vai criar o arquivo:
 
 ```bash
 EX="$(git rev-parse --git-common-dir)/info/exclude"
 grep -qxF 'PLAN.md' "$EX" || echo 'PLAN.md' >> "$EX"
 ```
 
-**Voce nao escreve este plano — o `orch-planner` escreve.** Chame o subagente
-`orch-planner` passando:
+Use `info/exclude`, **nao** o `.gitignore`: o `.gitignore` e versionado e a
+mudanca entraria no PR como ruido sem relacao com o ticket.
 
-- a especificacao do ticket, inteira
-- o `<IDENT>`
-- o caminho absoluto do worktree
-- **o caminho local de cada imagem** que o passo 1b baixou, se houver
+**1b. Se o prompt disse que o ticket tem imagem, baixe agora.**
+
+```bash
+<ORCH_ROOT>/bin/linear-assets.sh <IDENT>
+```
+
+Ele imprime o caminho local de cada arquivo. **Abra cada imagem com o Read** e
+passe os caminhos ao planner no passo 1c. Screenshot de bug e mockup de tela
+mudam o que vai ser construido; planejar so pelo texto produz codigo que resolve
+outra coisa.
+
+Nao tente abrir a URL `uploads.linear.app` direto: ela devolve 401 sem a chave
+da API, e o `WebFetch` nao le imagem nem quando a URL abre. Os arquivos ficam
+**fora do worktree** — nao copie para dentro, e nao ha nada para apagar depois.
+
+Se o script parar com `volume nao esta montado`, o destino configurado em
+`defaults.assets_root` esta indisponivel. Nao improvise: comente no ticket que
+nao conseguiu ver o anexo e siga com o texto, dizendo isso no corpo do PR.
+
+Sem aviso de imagem no prompt, **pule este passo** — nao rode o script para
+confirmar que nao ha nada.
+
+**1c. Gere o prompt por script e despache.**
+
+```bash
+<ORCH_ROOT>/bin/subagent-prompt.sh planner <IDENT> --worktree "$PWD"
+```
+
+Ele imprime o prompt pronto: IDENT, worktree, repo e stack, base branch, risco,
+as regras do `gate` deste repo e a especificacao inteira do ticket. **Passe a
+saida dele ao subagente `orch-planner`, sem reescrever.**
+
+🔴 **Nao redija esse prompt voce mesmo.** Medido no JJR-294: escrever a mao
+custou **44 s** em Opus/xhigh para produzir 228 tokens que saem do registry em
+**0,5 s**. Pior que o tempo, o texto variava a cada execucao — duas sessoes no
+mesmo ticket davam prompts diferentes ao planner sem ninguem perceber.
+
+Se o ticket tem imagem, acrescente os caminhos locais do passo 1b ao final.
 
 Ele roda em Opus, le o codigo e deixa o `PLAN.md` na raiz. Ele esta no worktree
-do cliente, onde os scripts do orquestrador nao existem: o que voce nao passar,
-ele nao tem como buscar.
-
-Voce roda em Opus com o teto de raciocinio que o risco do ticket escolheu:
-`xhigh` em `Risk/high`, um degrau abaixo em `medium`, dois em `low`. A divisao
-nao muda com isso — quem planeja chega com contexto limpo, quem implementa segue
-o plano. Medido em 30 dias, planejar e 24% do custo do worker e
-implementar e 76% — inverter isso e pagar caro pela parte errada.
+do cliente: o que voce nao passar, ele nao tem como buscar.
 
 **Nao planeje por conta propria "para adiantar".** Se voce escrever o plano e
 depois chamar o `orch-planner`, ele revisa a sua conclusao em vez de formar a
@@ -229,8 +224,29 @@ dele, e a diferenca de capacidade se perde. Chame primeiro.
 Se o `orch-planner` nao existir nesta maquina, o `bin/install-agents.sh` nunca
 rodou: **pare e reporte** — nao improvise o plano.
 
-Use `info/exclude`, **nao** o `.gitignore`: o `.gitignore` e versionado e a
-mudanca entraria no PR como ruido sem relacao com o ticket.
+### 2. Enquanto o planner roda, faca a burocracia
+
+Nada aqui bloqueia o planejamento, e por isso fica depois do despacho.
+
+```bash
+<ORCH_ROOT>/bin/board.sh move --to "In Progress" <IDENT>
+<ORCH_ROOT>/bin/sync-worktree-meta.sh <IDENT>
+```
+
+O `sync-worktree-meta` e o que faz o painel do Orca mostrar em que pe esta cada
+aba. Rode de novo depois de cada mudanca de estado sua (passo 7, e o 2b).
+
+**Mover para `In Progress` aqui nao perde claim nenhum.** Os dois claims deste
+sistema sao `Drafting` (triagem) e `Scheduled` (despacho), e o ticket ja chegou
+ate voce em `Scheduled`. `In Progress` e o worker reportando, nao reivindicando.
+
+### 2a. Quando o plano chegar
+
+Voce roda em Opus com o teto de raciocinio que o risco do ticket escolheu:
+`xhigh` em `Risk/high`, um degrau abaixo em `medium`, dois em `low`. A divisao
+nao muda com isso — quem planeja chega com contexto limpo, quem implementa segue
+o plano. Medido em 30 dias, planejar e 24% do custo do worker e implementar e
+76% — inverter isso e pagar caro pela parte errada.
 
 Publique o plano como comentario no ticket — e o que permite apagar o arquivo
 depois, e deixa o plano revisavel do celular:
@@ -374,8 +390,16 @@ nunca "rodou e passou".
 
 ### 4b. Review com contexto limpo, antes de commitar
 
-Chame o subagente `orch-reviewer` (Opus) passando `<IDENT>` e o worktree. Ele le
-o diff contra o ticket e devolve um veredito.
+```bash
+<ORCH_ROOT>/bin/subagent-prompt.sh reviewer <IDENT> --worktree "$PWD"
+```
+
+**Passe a saida dele ao subagente `orch-reviewer`, sem reescrever.** Ele le o
+diff contra o ticket e devolve um veredito.
+
+🔴 **Mesma regra do planner: nao redija este prompt.** Medido no JJR-294
+(12/09): escrever a mao custou **25 s**; o script leva 0,5 s e produz sempre o
+mesmo texto.
 
 **Ele e a unica verificacao automatica que existe neste fluxo.** Com `gate: []`
 ninguem roda lint, typecheck nem teste, e quem implementou foi voce, seguindo
@@ -478,8 +502,14 @@ fica no comentario do ticket, nao no PR.
 **Antes de abrir PR, cheque se ja existe um para a sua branch:**
 
 ```bash
-gh pr list --head "$(git rev-parse --abbrev-ref HEAD)" --state open --json url --jq '.[0].url // empty'
+gh pr list --head <sua-branch> --state open --json url --jq '.[0].url // empty'
 ```
+
+🔴 **Escreva o nome da branch literal, sem `$(git rev-parse ...)`.** Substituicao
+de comando impede o classificador de permissao de analisar a linha estaticamente,
+e ele bloqueia. Medido no JJR-294 (12/09): a versao com `$(...)` levou **54
+segundos para ser negada**, e a versao literal respondeu em 1 segundo. Voce ja
+sabe o nome da branch — ele veio no seu prompt e no `git status` do passo 1.
 
 Se voltar uma URL, **nao abra outro**. Empurre e comente no PR o que esta leva
 mudou — e isso que mantem a revisao anterior viva no mesmo lugar:

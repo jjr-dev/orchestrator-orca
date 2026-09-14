@@ -86,6 +86,8 @@ cat <<'SCRIPTS'
                                      comment/label); leitura segue no orca linear
   ./bin/implementer-model.sh <IDENT> --flags
                                      qual modelo/effort aquele ticket usaria
+  ./bin/subagent-prompt.sh planner|reviewer <IDENT>
+                                     prompt pronto do subagente, do registry
   ./bin/cleanup-worktrees.sh         lista worktrees que ja podem sair
 SCRIPTS
 
